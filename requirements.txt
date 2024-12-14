@@ -1,0 +1,5 @@
+mediapipe==0.10.9
+opencv-python==4.9.0.80
+pynput==1.7.6
+torch==2.2.0
+numpy==1.26.4
