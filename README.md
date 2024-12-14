@@ -29,16 +29,16 @@ pip install -r requirements.txt
 ## フォルダ構成
 ```
 keyboard-assist-research/
-├── src/                    # ソースコードディレクトリ
+├── src/                   # ソースコードディレクトリ
 │   ├── camera.py          # カメラ制御
 │   ├── hand_track.py      # 手の認識処理
 │   ├── keyboard.py        # キーボード制御
 │   └── logger.py          # ログ処理
-├── data/                   # データ保存用ディレクトリ
+├── data/                  # データ保存用ディレクトリ
 │   ├── models/            # 学習済みモデル
 │   └── logs/              # ログファイル
-├── tests/                  # テストコード
-├── requirements.txt        # 依存パッケージリスト
+├── tests/                 # テストコード
+├── requirements.txt       # 依存パッケージリスト
 ├── main.py                # メインプログラム
 └── README.md              # 本ファイル
 ```
