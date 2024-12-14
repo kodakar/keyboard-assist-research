@@ -1,51 +1,46 @@
-# main.py
+from src.camera import Camera
+from src.hand_tracker import HandTracker
+from src.keyboard import KeyboardTracker
+from src.data_collector import DataCollector
 import cv2
-import mediapipe as mp
-
-from pynput import keyboard
-
-def on_press(key):
-    try:
-        print(f'キーが押されました: {key.char}')
-    except AttributeError:
-        print(f'特殊キーが押されました: {key}')
+import os
 
 def main():
-    # キーボードリスナーの設定
-    listener = keyboard.Listener(on_press=on_press)
-    listener.start()
-
-    # 既存のカメラ処理
-    cap = cv2.VideoCapture(0)
-    mp_hands = mp.solutions.hands
-    hands = mp_hands.Hands()
-    mp_draw = mp.solutions.drawing_utils
-
-    while True:
-        ret, frame = cap.read()
-        if not ret:
-            break
-            
-        rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        results = hands.process(rgb_frame)
-        
-        if results.multi_hand_landmarks:
-            for hand_landmarks in results.multi_hand_landmarks:
-                mp_draw.draw_landmarks(frame, hand_landmarks, mp_hands.HAND_CONNECTIONS)
-                # 手の位置を表示（デバッグ用）
-                for id, lm in enumerate(hand_landmarks.landmark):
-                    h, w, c = frame.shape
-                    cx, cy = int(lm.x * w), int(lm.y * h)
-                    if id == 8:  # 人差し指の先端
-                        cv2.circle(frame, (cx, cy), 15, (255, 0, 255), cv2.FILLED)
-        
-        cv2.imshow('Hand Tracking', frame)
-        if cv2.waitKey(1) & 0xFF == ord('q'):
-            break
+    # データ保存用ディレクトリの作成
+    os.makedirs('data', exist_ok=True)
     
-    cap.release()
-    cv2.destroyAllWindows()
-    listener.stop()
+    camera = Camera()
+    hand_tracker = HandTracker()
+    keyboard_tracker = KeyboardTracker()
+    data_collector = DataCollector()
+    
+    keyboard_tracker.start()
+    
+    try:
+        while True:
+            frame = camera.read_frame()
+            if frame is None:
+                break
+            
+            results = hand_tracker.detect_hands(frame)
+            hand_tracker.draw_landmarks(frame, results)
+            
+            key = keyboard_tracker.get_key_event()
+            if key and results.multi_hand_landmarks:
+                # データを収集
+                data_collector.add_sample(key, results.multi_hand_landmarks[0])
+                print(f"Collected data for key: {key}")
+            
+            cv2.imshow('Hand Tracking', frame)
+            if cv2.waitKey(1) & 0xFF == ord('q'):
+                break
+    
+    finally:
+        # 終了時にデータを保存
+        data_collector.save_to_file()
+        camera.release()
+        keyboard_tracker.stop()
+        cv2.destroyAllWindows()
 
 if __name__ == "__main__":
     main()
