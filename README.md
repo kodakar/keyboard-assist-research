@@ -26,6 +26,11 @@ source venv/bin/activate  # MacOS/Linux
 pip install -r requirements.txt
 ```
 
+4. 仮想環境の無効化
+```bash
+deactivate
+```
+
 ## フォルダ構成
 ```
 keyboard-assist-research/
