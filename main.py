@@ -24,10 +24,10 @@ def main():
                 break
             
             # キーボード検出
-            debug_frame = keyboard_detector.detect_keyboard(frame)
+            # debug_frame = keyboard_detector.detect_keyboard(frame)
 
-            results = hand_tracker.detect_hands(debug_frame)
-            hand_tracker.draw_landmarks(debug_frame, results)
+            results = hand_tracker.detect_hands(frame)
+            hand_tracker.draw_landmarks(frame, results)
             
             key = keyboard_tracker.get_key_event()
             if key and results.multi_hand_landmarks:
@@ -35,7 +35,7 @@ def main():
                 data_collector.add_sample(key, results.multi_hand_landmarks[0])
                 print(f"Collected data for key: {key}")
             
-            # cv2.imshow('Hand Tracking', frame)
+            cv2.imshow('Hand Tracking', frame)
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
     
