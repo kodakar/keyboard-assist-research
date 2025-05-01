@@ -8,19 +8,12 @@ import os
 
 def main():
     # データ保存用ディレクトリの作成
-    print(0)
     os.makedirs('data', exist_ok=True)
-    print(1)
     camera = Camera()
-    print(12)
     hand_tracker = HandTracker()
-    print(13)
     keyboard_tracker = KeyboardTracker()
-    print(14)
     data_collector = DataCollector()
-    print(15)
     keyboard_detector = KeyboardDetector()
-    print(16)
     
     keyboard_tracker.start()
     
