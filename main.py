@@ -1,9 +1,9 @@
 from src.camera import Camera
 from src.hand_tracker import HandTracker
-from src.keyboard_tracker import KeyboardTracker
+from src.keyboard.keyboard_tracker import KeyboardTracker
 from src.data_collector import DataCollector
-from src.keyboard_detector import KeyboardDetector
-from src.keyboard_map import *
+from src.keyboard.keyboard_detector import KeyboardDetector
+from src.keyboard.keyboard_map import *
 import cv2
 import os
 
@@ -16,7 +16,7 @@ def main():
     data_collector = DataCollector()
     keyboard_detector = KeyboardDetector()
     
-     # キーボードマップの初期化
+    # キーボードマップの初期化
     keyboard_map = KeyboardMap()
     
     # キーボードマップが存在しない場合、OCR検出を試みる
