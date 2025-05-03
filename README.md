@@ -43,22 +43,77 @@ deactivate
 conda deactivate
 ```
 
-## フォルダ構成
+## フォルダ構成(最終案)
 
 ```
 keyboard-assist-research/
-├── src/                   # ソースコードディレクトリ
-│   ├── camera.py          # カメラ制御
-│   ├── hand_track.py      # 手の認識処理
-│   ├── keyboard.py        # キーボード制御
-│   └── logger.py          # ログ処理
-├── data/                  # データ保存用ディレクトリ
-│   ├── models/            # 学習済みモデル
-│   └── logs/              # ログファイル
-├── tests/                 # テストコード
-├── requirements.txt       # 依存パッケージリスト
-├── main.py                # メインプログラム
-└── README.md              # 本ファイル
+├── .gitignore
+├── README.md
+├── main.py                   # メインのアプリケーションエントリポイント
+├── config.py                 # 設定ファイル（パラメータ、定数など）
+├── requirements.txt
+├── src/
+│   ├── camera.py             # カメラ制御
+│   ├── data_collector.py     # データ収集
+│   ├── hand_tracker.py       # 手の認識処理
+│   ├── keyboard/
+│   │   ├── __init__.py
+│   │   ├── keyboard_mapper.py  # キーボードレイアウトとマッピング
+│   │   ├── keyboard_tracker.py # キーボード入力検出（現在のkeyboard.py）
+│   │   └── keyboard_detector.py # キーボード検出・認識
+│   ├── filters/
+│   │   ├── __init__.py
+│   │   ├── base_filter.py    # フィルター基底クラス
+│   │   ├── moving_average.py # 移動平均フィルター
+│   │   ├── kalman_filter.py  # カルマンフィルター
+│   │   └── savitzky_golay.py # Savitzky-Golayフィルター
+│   ├── models/
+│   │   ├── __init__.py
+│   │   ├── base_model.py     # モデル基底クラス
+│   │   ├── lstm_model.py     # LSTMモデル
+│   │   ├── gru_model.py      # GRUモデル
+│   │   └── attention.py      # Attention機構
+│   ├── intent/
+│   │   ├── __init__.py
+│   │   ├── estimator.py      # 意図推測ベースクラス
+│   │   ├── distance_based.py # 距離ベースの意図推測
+│   │   ├── trajectory_based.py # 軌跡ベースの意図推測
+│   │   └── nlp_correction.py # 言語モデルによる補正
+│   ├── ui/
+│   │   ├── __init__.py
+│   │   ├── visualization.py  # 可視化コンポーネント
+│   │   └── feedback.py       # ユーザーフィードバック
+│   ├── utils/
+│   │   ├── __init__.py
+│   │   ├── logger.py         # ロギング機能
+│   │   ├── metrics.py        # 評価指標
+│   │   └── preprocessing.py  # データ前処理
+│   └── experiments/
+│       ├── __init__.py
+│       ├── data_analysis.py  # データ分析
+│       └── evaluation.py     # 性能評価
+├── data/
+│   ├── raw/                  # 生データ
+│   ├── processed/            # 処理済みデータ
+│   ├── models/               # 学習済みモデル
+│   └── results/              # 評価結果
+├── notebooks/                # Jupyter notebooks
+│   ├── data_exploration.ipynb
+│   ├── model_training.ipynb
+│   └── result_analysis.ipynb
+├── scripts/                  # スクリプト類
+│   ├── setup.sh              # 環境設定
+│   ├── collect_data.py       # データ収集専用スクリプト
+│   └── train_model.py        # モデル学習専用スクリプト
+├── tests/                    # テストコード
+│   ├── test_filters.py
+│   ├── test_models.py
+│   └── test_intent.py
+└── docs/                     # ドキュメント
+    ├── architecture.md       # システム設計図
+    ├── installation.md       # インストール手順
+    ├── api.md                # API仕様書
+    └── user_manual.md        # ユーザーマニュアル
 ```
 
 ## 主な機能
