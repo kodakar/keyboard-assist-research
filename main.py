@@ -23,7 +23,8 @@ def main():
     if not os.path.exists('keyboard_map.json'):
         print("キーボードマップが見つかりません。手動キャリブレーションを開始します")
         keyboard_map.setup_manual_calibration()
-        keyboard_tracker.start()
+    
+    keyboard_tracker.start()
 
     # ウィンドウ作成
     cv2.namedWindow('Hand Tracking')
