@@ -1,7 +1,7 @@
 # src/keyboard_map.py を修正（OCR機能を統合）
 import cv2
 import numpy as np
-import pytesseract
+# import pytesseract
 import json
 import os
 
@@ -14,8 +14,8 @@ class KeyboardMap:
         
         # Windowsの場合はTesseractのパスを設定
         # Macやlinuxでは不要な場合があります
-        if os.name == 'nt':  # Windowsの場合
-            pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
+        # if os.name == 'nt':  # Windowsの場合
+        #     pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
         
         # 設定ファイルが存在する場合は読み込む
         if os.path.exists(config_file):
@@ -62,7 +62,7 @@ class KeyboardMap:
         print("キーボードキャリブレーションを開始します")
         print("各キーを順番に押してください")
     
-    def detect_keyboard_ocr(self, frame):
+    # def detect_keyboard_ocr(self, frame):
         """OCRを使用してキーボードのキーを検出"""
         # グレースケールに変換
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
