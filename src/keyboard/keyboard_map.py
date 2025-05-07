@@ -63,64 +63,64 @@ class KeyboardMap:
         print("各キーを順番に押してください")
     
     # def detect_keyboard_ocr(self, frame):
-        """OCRを使用してキーボードのキーを検出"""
-        # グレースケールに変換
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    #     """OCRを使用してキーボードのキーを検出"""
+    #     # グレースケールに変換
+    #     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         
-        # 閾値処理でコントラストを強調
-        _, thresh = cv2.threshold(gray, 150, 255, cv2.THRESH_BINARY)
+    #     # 閾値処理でコントラストを強調
+    #     _, thresh = cv2.threshold(gray, 150, 255, cv2.THRESH_BINARY)
         
-        # ノイズ除去
-        kernel = np.ones((2, 2), np.uint8)
-        opening = cv2.morphologyEx(thresh, cv2.MORPH_OPEN, kernel)
+    #     # ノイズ除去
+    #     kernel = np.ones((2, 2), np.uint8)
+    #     opening = cv2.morphologyEx(thresh, cv2.MORPH_OPEN, kernel)
         
-        # 輪郭検出
-        contours, _ = cv2.findContours(opening, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    #     # 輪郭検出
+    #     contours, _ = cv2.findContours(opening, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         
-        # 検出したキーの情報を保存
-        detected_keys = []
+    #     # 検出したキーの情報を保存
+    #     detected_keys = []
         
-        # 各輪郭を処理
-        for contour in contours:
-            # 小さすぎる輪郭は無視
-            if cv2.contourArea(contour) < 100:
-                continue
+    #     # 各輪郭を処理
+    #     for contour in contours:
+    #         # 小さすぎる輪郭は無視
+    #         if cv2.contourArea(contour) < 100:
+    #             continue
                 
-            # 輪郭の外接矩形を取得
-            x, y, w, h = cv2.boundingRect(contour)
+    #         # 輪郭の外接矩形を取得
+    #         x, y, w, h = cv2.boundingRect(contour)
             
-            # キーの候補領域を切り出し
-            key_roi = gray[y:y+h, x:x+w]
+    #         # キーの候補領域を切り出し
+    #         key_roi = gray[y:y+h, x:x+w]
             
-            # OCRでテキスト認識
-            config = '--psm 10'  # 単一文字モード
-            text = pytesseract.image_to_string(key_roi, config=config).strip()
+    #         # OCRでテキスト認識
+    #         config = '--psm 10'  # 単一文字モード
+    #         text = pytesseract.image_to_string(key_roi, config=config).strip()
             
-            # 空でなければキー情報を追加
-            if text and len(text) == 1:  # 単一文字のみ対象
-                key = text.lower()  # 小文字に統一
-                detected_keys.append({
-                    'key': key,
-                    'x': (x + w/2) / frame.shape[1],  # 正規化座標
-                    'y': (y + h/2) / frame.shape[0]
-                })
+    #         # 空でなければキー情報を追加
+    #         if text and len(text) == 1:  # 単一文字のみ対象
+    #             key = text.lower()  # 小文字に統一
+    #             detected_keys.append({
+    #                 'key': key,
+    #                 'x': (x + w/2) / frame.shape[1],  # 正規化座標
+    #                 'y': (y + h/2) / frame.shape[0]
+    #             })
                 
-                # フレームに検出結果を描画
-                cv2.rectangle(frame, (x, y), (x+w, y+h), (0, 255, 0), 2)
-                cv2.putText(frame, key, (x, y-5), 
-                           cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
+    #             # フレームに検出結果を描画
+    #             cv2.rectangle(frame, (x, y), (x+w, y+h), (0, 255, 0), 2)
+    #             cv2.putText(frame, key, (x, y-5), 
+    #                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
                 
-                # キー位置を更新
-                self.key_positions[key] = {
-                    'x': (x + w/2) / frame.shape[1],
-                    'y': (y + h/2) / frame.shape[0]
-                }
+    #             # キー位置を更新
+    #             self.key_positions[key] = {
+    #                 'x': (x + w/2) / frame.shape[1],
+    #                 'y': (y + h/2) / frame.shape[0]
+    #             }
         
-        # 結果を保存
-        if detected_keys:
-            self.save_map()
+    #     # 結果を保存
+    #     if detected_keys:
+    #         self.save_map()
         
-        return frame, detected_keys
+    #     return frame, detected_keys
     
     def update_from_collected_data(self, collected_data):
         """収集したデータからキーボードマップを更新"""
