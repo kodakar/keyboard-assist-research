@@ -20,7 +20,7 @@
 python3 -m venv venv # MacOS/Linux
 py -3.10 -m venv venv_py310 # Windows
 
-conda conda env create -f environment.yml
+conda env create -f environment.yml
 conda activate <env_name>
 ```
 
