@@ -1,16 +1,32 @@
-from src.camera import Camera
-from src.hand_tracker import HandTracker
-from src.keyboard.keyboard_tracker import KeyboardTracker
-from src.data_collector import DataCollector
+from core.camera import Camera
+from core.hand_tracker import HandTracker
+from input.keyboard_tracker import KeyboardTracker
+from input.data_collector import DataCollector
 from src.keyboard.keyboard_detector import KeyboardDetector
-from src.keyboard.keyboard_map import *
+from input.keyboard_map import *
 from src.filters.moving_average import MovingAverageFilter
 import cv2
 import os
 import json
 import time
+import argparse
+
+def parse_args():
+    parser = argparse.ArgumentParser(description='キーボード入力支援システム')
+    parser.add_argument('--mode', choices=['debug', 'test'], default='debug',
+                        help='実行モード (default: debug)')
+    parser.add_argument('--text', default='hello world',
+                        help='テストモード時のテスト文字列 (default: "hello world")')
+    return parser.parse_args()
 
 def main():
+    args = parse_args()
+    
+    if args.mode == 'debug':
+        run_debug_mode()
+    elif args.mode == 'test':
+        run_test_mode(args.text)
+
     # データ保存用ディレクトリの作成
     os.makedirs('data', exist_ok=True)
     camera = Camera()
@@ -197,6 +213,14 @@ def main():
         camera.release()
         keyboard_tracker.stop()
         cv2.destroyAllWindows()
+
+def run_debug_mode():
+    # デバッグモード用の処理
+    pass
+
+def run_test_mode(test_text):
+    # テストモード用の処理
+    pass
 
 if __name__ == "__main__":
     main()

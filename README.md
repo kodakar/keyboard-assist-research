@@ -51,71 +51,57 @@ conda deactivate
 keyboard-assist-research/
 ├── .gitignore
 ├── README.md
-├── main.py                   # メインのアプリケーションエントリポイント
-├── config.py                 # 設定ファイル（パラメータ、定数など）
+├── main.py                      # エントリーポイント（引数解析のみ）
 ├── requirements.txt
+├── config/
+│   ├── __init__.py
+│   └── settings.py              # 設定管理（実験条件、パラメータ等）
 ├── src/
-│   ├── camera.py             # カメラ制御
-│   ├── data_collector.py     # データ収集
-│   ├── hand_tracker.py       # 手の認識処理
-│   ├── keyboard/
+│   ├── core/
 │   │   ├── __init__.py
-│   │   ├── keyboard_mapper.py  # キーボードレイアウトとマッピング
-│   │   ├── keyboard_tracker.py # キーボード入力検出（現在のkeyboard.py）
-│   │   └── keyboard_detector.py # キーボード検出・認識
-│   ├── filters/
+│   │   ├── system.py            # メインシステム（全体統合）
+│   │   ├── camera.py            # カメラ制御
+│   │   ├── hand_tracker.py      # 手検出
+│   │   └── intent_estimator.py  # 意図推定（距離計算等）
+│   ├── input/
 │   │   ├── __init__.py
-│   │   ├── base_filter.py    # フィルター基底クラス
-│   │   ├── moving_average.py # 移動平均フィルター
-│   │   ├── kalman_filter.py  # カルマンフィルター
-│   │   └── savitzky_golay.py # Savitzky-Golayフィルター
-│   ├── models/
+│   │   ├── keyboard_tracker.py  # キー入力監視
+│   │   └── keyboard_map.py      # キーボードマッピング
+│   ├── processing/
 │   │   ├── __init__.py
-│   │   ├── base_model.py     # モデル基底クラス
-│   │   ├── lstm_model.py     # LSTMモデル
-│   │   ├── gru_model.py      # GRUモデル
-│   │   └── attention.py      # Attention機構
-│   ├── intent/
+│   │   ├── filters/
+│   │   │   ├── __init__.py
+│   │   │   ├── base_filter.py   # フィルター基底クラス
+│   │   │   ├── moving_average.py # 移動平均フィルター
+│   │   │   ├── kalman_filter.py # カルマンフィルター
+│   │   │   └── savitzky_golay.py # Savitzky-Golayフィルター
+│   │   └── models/              # 機械学習モデル
+│   │       ├── __init__.py
+│   │       ├── base_model.py    # モデル基底クラス
+│   │       ├── lstm_model.py    # LSTMモデル
+│   │       ├── gru_model.py     # GRUモデル
+│   │       └── attention.py     # Attention機構
+│   ├── data/
 │   │   ├── __init__.py
-│   │   ├── estimator.py      # 意図推測ベースクラス
-│   │   ├── distance_based.py # 距離ベースの意図推測
-│   │   ├── trajectory_based.py # 軌跡ベースの意図推測
-│   │   └── nlp_correction.py # 言語モデルによる補正
+│   │   ├── collector.py         # データ収集
+│   │   └── exporter.py          # データ出力
+│   ├── modes/
+│   │   ├── __init__.py
+│   │   ├── debug_mode.py        # デバッグモード
+│   │   └── test_mode.py         # テストモード
 │   ├── ui/
 │   │   ├── __init__.py
-│   │   ├── visualization.py  # 可視化コンポーネント
-│   │   └── feedback.py       # ユーザーフィードバック
-│   ├── utils/
-│   │   ├── __init__.py
-│   │   ├── logger.py         # ロギング機能
-│   │   ├── metrics.py        # 評価指標
-│   │   └── preprocessing.py  # データ前処理
-│   └── experiments/
+│   │   ├── display_manager.py   # 表示統合管理
+│   │   ├── debug_display.py     # デバッグ用表示
+│   │   └── test_display.py      # テスト用表示
+│   └── utils/
 │       ├── __init__.py
-│       ├── data_analysis.py  # データ分析
-│       └── evaluation.py     # 性能評価
+│       ├── logger.py            # ログ管理
+│       └── metrics.py           # 評価指標計算
 ├── data/
-│   ├── raw/                  # 生データ
-│   ├── processed/            # 処理済みデータ
-│   ├── models/               # 学習済みモデル
-│   └── results/              # 評価結果
-├── notebooks/                # Jupyter notebooks
-│   ├── data_exploration.ipynb
-│   ├── model_training.ipynb
-│   └── result_analysis.ipynb
-├── scripts/                  # スクリプト類
-│   ├── setup.sh              # 環境設定
-│   ├── collect_data.py       # データ収集専用スクリプト
-│   └── train_model.py        # モデル学習専用スクリプト
-├── tests/                    # テストコード
-│   ├── test_filters.py
-│   ├── test_models.py
-│   └── test_intent.py
-└── docs/                     # ドキュメント
-    ├── architecture.md       # システム設計図
-    ├── installation.md       # インストール手順
-    ├── api.md                # API仕様書
-    └── user_manual.md        # ユーザーマニュアル
+│   ├── raw/                     # 生データ
+│   ├── processed/               # 処理済みデータ
+│   ├
 ```
 
 ## 主な機能
