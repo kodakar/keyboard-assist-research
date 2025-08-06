@@ -4,6 +4,7 @@ from src.input.keyboard_tracker import KeyboardTracker
 from src.input.data_collector import DataCollector
 from src.input.keyboard_map import KeyboardMap
 from src.processing.filters.moving_average import MovingAverageFilter
+from src.ui.display_manager import DisplayManager
 import cv2
 import os
 import json
@@ -21,7 +22,10 @@ def run_debug_mode():
     keyboard_map = KeyboardMap()
 
     # 震え補正フィルターの初期化
-    tremor_filter = MovingAverageFilter(window_size=8)  # 追加
+    tremor_filter = MovingAverageFilter(window_size=8)
+    
+    # DisplayManagerの初期化
+    display_manager = DisplayManager()
     
     # キーボードマップが存在しない場合、OCR検出を試みる
     if not os.path.exists('keyboard_map.json'):
@@ -39,11 +43,18 @@ def run_debug_mode():
     predicted_key_timer = 0
     predicted_key_duration = 60  # 60フレーム（約2秒）表示し続ける
     
+    # FPS計算用
+    fps_counter = 0
+    fps_start_time = time.time()
+    current_fps = 0.0
+    
     # ウィンドウ作成
-    cv2.namedWindow('Hand Tracking')
+    cv2.namedWindow('Debug Mode - Hand Tracking')
     
     try:
         while True:
+            frame_start_time = time.time()
+            
             frame = camera.read_frame()
             if frame is None:
                 break
@@ -80,10 +91,6 @@ def run_debug_mode():
                 # 最も近いキーを取得（フィルタリング後の位置から）
                 nearest_key, distance = keyboard_map.get_nearest_key(filtered_x, filtered_y)
                 current_nearest_key = nearest_key
-                
-                # リアルタイムで予測キーを表示
-                cv2.putText(frame, f"Current prediction: {nearest_key}", (10, 30), 
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2)
 
             # 実際のキー入力を処理
             key = keyboard_tracker.get_key_event()
@@ -100,24 +107,32 @@ def run_debug_mode():
                 last_predicted_key = current_nearest_key
                 predicted_key_timer = predicted_key_duration
 
-            # 最後の予測キーを一定時間表示
-            if predicted_key_timer > 0 and last_predicted_key:
-                cv2.putText(frame, f"Last prediction: {last_predicted_key}", (10, 90), 
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
+            # タイマーを減らす
+            if predicted_key_timer > 0:
                 predicted_key_timer -= 1
+
+            # FPS計算
+            fps_counter += 1
+            if time.time() - fps_start_time >= 1.0:
+                current_fps = fps_counter / (time.time() - fps_start_time)
+                fps_counter = 0
+                fps_start_time = time.time()
+
+            # 表示情報を辞書で準備
+            info = {
+                'current_prediction': current_nearest_key if current_nearest_key else "None",
+                'last_prediction': last_predicted_key if predicted_key_timer > 0 else None,
+                'actual_history': ''.join(str(k) for k in raw_keystrokes[-10:]) if raw_keystrokes else "",
+                'predicted_history': ''.join(str(k) for k in predicted_keys[-10:]) if predicted_keys else "",
+                'hand_detected': results.multi_hand_landmarks is not None,
+                'system_status': "Running",
+                'fps': current_fps
+            }
             
-            # 入力履歴の表示（最新の10文字）
-            if raw_keystrokes:
-                raw_text = ''.join(str(k) for k in raw_keystrokes[-10:])
-                predicted_text = ''.join(str(k) for k in predicted_keys[-10:])
-                
-                # 履歴を表示
-                cv2.putText(frame, f"Actual: {raw_text}", (10, frame.shape[0] - 90), 
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
-                cv2.putText(frame, f"Predicted: {predicted_text}", (10, frame.shape[0] - 60), 
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
-                    
-            cv2.imshow('Hand Tracking', frame)
+            # DisplayManagerで統一表示
+            display_manager.render_frame(frame, info, mode='debug')
+            
+            cv2.imshow('Debug Mode - Hand Tracking', frame)
             
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
@@ -128,4 +143,3 @@ def run_debug_mode():
         camera.release()
         keyboard_tracker.stop()
         cv2.destroyAllWindows()
-

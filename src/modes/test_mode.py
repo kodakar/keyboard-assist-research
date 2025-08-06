@@ -4,6 +4,7 @@ from src.input.keyboard_tracker import KeyboardTracker
 from src.input.data_collector import DataCollector
 from src.input.keyboard_map import KeyboardMap
 from src.processing.filters.moving_average import MovingAverageFilter
+from src.ui.display_manager import DisplayManager
 import cv2
 import os
 import json
@@ -21,7 +22,10 @@ def run_test_mode(test_text):
     keyboard_map = KeyboardMap()
 
     # 震え補正フィルターの初期化
-    tremor_filter = MovingAverageFilter(window_size=8)  # 追加
+    tremor_filter = MovingAverageFilter(window_size=8)
+    
+    # DisplayManagerの初期化
+    display_manager = DisplayManager()
     
     # キーボードマップが存在しない場合、OCR検出を試みる
     if not os.path.exists('keyboard_map.json'):
@@ -44,11 +48,25 @@ def run_test_mode(test_text):
     predicted_key_timer = 0
     predicted_key_duration = 60  # 60フレーム（約2秒）表示し続ける
     
+    # 結果表示用タイマー
+    result_display_timer = 0
+    result_display_duration = 90  # 90フレーム（約3秒）表示
+    last_result = None
+    
+    # FPS計算用
+    fps_counter = 0
+    fps_start_time = time.time()
+    current_fps = 0.0
+    
     # ウィンドウ作成
-    cv2.namedWindow('Hand Tracking')
+    cv2.namedWindow('Test Mode - Keyboard Input Test')
+    
+    print(f"テストを開始します。「{test_text}」を入力してください。")
     
     try:
         while True:
+            frame_start_time = time.time()
+            
             frame = camera.read_frame()
             if frame is None:
                 break
@@ -85,22 +103,6 @@ def run_test_mode(test_text):
                 # 最も近いキーを取得（フィルタリング後の位置から）
                 nearest_key, distance = keyboard_map.get_nearest_key(filtered_x, filtered_y)
                 current_nearest_key = nearest_key
-                
-                # リアルタイムで予測キーを表示
-                cv2.putText(frame, f"Current prediction: {nearest_key}", (10, 30), 
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2)
-
-            # 実験モードの表示
-            if experiment_index < len(EXPERIMENT_TEXT):
-                intended_key = EXPERIMENT_TEXT[experiment_index]
-                
-                # 意図したキーを大きく表示
-                cv2.putText(frame, f"Type this key: {intended_key}", (10, 320), 
-                            cv2.FONT_HERSHEY_SIMPLEX, 1.5, (255, 0, 0), 3)
-                
-                # 進捗を表示
-                cv2.putText(frame, f"Progress: {experiment_index}/{len(EXPERIMENT_TEXT)}", 
-                            (10, 350), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
 
             # 実際のキー入力を処理
             key = keyboard_tracker.get_key_event()
@@ -123,20 +125,15 @@ def run_test_mode(test_text):
                         'timestamp': time.time()
                     })
                     
-                    # 結果を表示
-                    result_color = (0, 255, 0) if is_prediction_correct else (0, 0, 255)
-                    result_text = "CORRECT" if is_prediction_correct else "WRONG"
-                    cv2.putText(frame, f"Prediction: {result_text}", (10, 200), 
-                                cv2.FONT_HERSHEY_SIMPLEX, 1.0, result_color, 2)
+                    # 結果を保存してタイマー設定
+                    last_result = "CORRECT" if is_prediction_correct else "WRONG"
+                    result_display_timer = result_display_duration
                     
                     experiment_index += 1
                     
-                    # 精度を計算
-                    if experiment_results:
-                        correct_predictions = sum(1 for r in experiment_results if r['prediction_correct'])
-                        accuracy = correct_predictions / len(experiment_results) * 100
-                        cv2.putText(frame, f"Accuracy: {accuracy:.1f}%", (10, 240), 
-                                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 0), 2)
+                    # テスト完了チェック
+                    if experiment_index >= len(EXPERIMENT_TEXT):
+                        print("テスト完了！結果を確認してください。")
                 
                 # 履歴に追加
                 raw_keystrokes.append(key)
@@ -146,52 +143,109 @@ def run_test_mode(test_text):
                 last_predicted_key = current_nearest_key
                 predicted_key_timer = predicted_key_duration
 
-            # 最後の予測キーを一定時間表示
-            if predicted_key_timer > 0 and last_predicted_key:
-                cv2.putText(frame, f"Last prediction: {last_predicted_key}", (10, 90), 
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
+            # タイマーを減らす
+            if predicted_key_timer > 0:
                 predicted_key_timer -= 1
+            if result_display_timer > 0:
+                result_display_timer -= 1
+
+            # FPS計算
+            fps_counter += 1
+            if time.time() - fps_start_time >= 1.0:
+                current_fps = fps_counter / (time.time() - fps_start_time)
+                fps_counter = 0
+                fps_start_time = time.time()
+
+            # 現在の精度を計算
+            current_accuracy = 0.0
+            if experiment_results:
+                correct_predictions = sum(1 for r in experiment_results if r['prediction_correct'])
+                current_accuracy = correct_predictions / len(experiment_results) * 100
+
+            # 表示情報を辞書で準備
+            info = {
+                'current_prediction': current_nearest_key if current_nearest_key else "None",
+                'last_prediction': last_predicted_key if predicted_key_timer > 0 else None,
+                'actual_history': ''.join(str(k) for k in raw_keystrokes[-10:]) if raw_keystrokes else "",
+                'predicted_history': ''.join(str(k) for k in predicted_keys[-10:]) if predicted_keys else "",
+                'hand_detected': results.multi_hand_landmarks is not None,
+                'system_status': "Testing",
+                'fps': current_fps
+            }
             
-            # 入力履歴の表示（最新の10文字）
-            if raw_keystrokes:
-                raw_text = ''.join(str(k) for k in raw_keystrokes[-10:])
-                predicted_text = ''.join(str(k) for k in predicted_keys[-10:])
-                
-                # 履歴を表示
-                cv2.putText(frame, f"Actual: {raw_text}", (10, frame.shape[0] - 90), 
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
-                cv2.putText(frame, f"Predicted: {predicted_text}", (10, frame.shape[0] - 60), 
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
-                    
-            cv2.imshow('Hand Tracking', frame)
+            # テスト専用の情報を追加
+            if experiment_index < len(EXPERIMENT_TEXT):
+                info['test_instruction'] = EXPERIMENT_TEXT[experiment_index]
+                info['test_progress'] = f"{experiment_index + 1}/{len(EXPERIMENT_TEXT)}"
+            else:
+                info['test_instruction'] = "Complete!"
+                info['test_progress'] = f"{len(EXPERIMENT_TEXT)}/{len(EXPERIMENT_TEXT)}"
+            
+            # 結果表示
+            if result_display_timer > 0 and last_result:
+                info['test_result'] = last_result
+            
+            # 精度表示
+            if experiment_results:
+                info['accuracy'] = current_accuracy
+            
+            # DisplayManagerで統一表示
+            display_manager.render_frame(frame, info, mode='test')
+            
+            cv2.imshow('Test Mode - Keyboard Input Test', frame)
             
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
+            
+            # テスト完了で自動終了（オプション）
+            # if experiment_index >= len(EXPERIMENT_TEXT):
+            #     time.sleep(3)  # 3秒結果を表示してから終了
+            #     break
     
     finally:
         # 実験結果を保存
         if experiment_results:
-            with open('data/experiment_results.json', 'w') as f:
-                json.dump(experiment_results, f, indent=2)
+            # タイムスタンプ付きのファイル名
+            timestamp = time.strftime("%Y%m%d_%H%M%S")
+            filename = f'data/test_results_{timestamp}.json'
+            
+            # 結果データに追加情報を含める
+            result_data = {
+                'test_text': test_text,
+                'total_characters': len(test_text),
+                'completed_characters': len(experiment_results),
+                'timestamp': timestamp,
+                'results': experiment_results
+            }
+            
+            with open(filename, 'w', encoding='utf-8') as f:
+                json.dump(result_data, f, indent=2, ensure_ascii=False)
             
             # 実験結果のサマリーを表示
             correct_predictions = sum(1 for r in experiment_results if r['prediction_correct'])
             total_predictions = len(experiment_results)
             if total_predictions > 0:
                 accuracy = correct_predictions / total_predictions * 100
-                print(f"\n実験結果のサマリー:")
+                print(f"\n{'='*50}")
+                print(f"テスト結果サマリー")
+                print(f"{'='*50}")
+                print(f"テスト文字列: '{test_text}'")
+                print(f"完了文字数: {total_predictions}/{len(test_text)}")
                 print(f"予測精度: {accuracy:.1f}% ({correct_predictions}/{total_predictions})")
+                print(f"結果保存先: {filename}")
                 
                 # 間違った予測の詳細を表示
                 wrong_predictions = [r for r in experiment_results if not r['prediction_correct']]
                 if wrong_predictions:
-                    print("\n間違った予測:")
-                    for wp in wrong_predictions:
-                        print(f"  意図: '{wp['intended']}', 実際: '{wp['actual']}', 予測: '{wp['predicted']}'")
+                    print(f"\n間違った予測 ({len(wrong_predictions)}件):")
+                    for i, wp in enumerate(wrong_predictions[:5], 1):  # 最初の5件のみ表示
+                        print(f"  {i}. 意図: '{wp['intended']}', 実際: '{wp['actual']}', 予測: '{wp['predicted']}'")
+                    if len(wrong_predictions) > 5:
+                        print(f"  ... 他{len(wrong_predictions)-5}件")
+                print(f"{'='*50}")
         
         # データを保存
         data_collector.save_to_file()
         camera.release()
         keyboard_tracker.stop()
         cv2.destroyAllWindows()
-
