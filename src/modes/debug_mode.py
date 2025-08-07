@@ -5,6 +5,7 @@ from src.input.data_collector import DataCollector
 from src.input.keyboard_map import KeyboardMap
 from src.processing.filters.moving_average import MovingAverageFilter
 from src.ui.display_manager import DisplayManager
+from src.ui.key_formatter import KeyFormatter
 import cv2
 import os
 import json
@@ -48,8 +49,15 @@ def run_debug_mode():
     fps_start_time = time.time()
     current_fps = 0.0
     
+    # サポートされているキーの統計
+    supported_keys_pressed = 0
+    total_keys_pressed = 0
+    
     # ウィンドウ作成
     cv2.namedWindow('Debug Mode - Hand Tracking')
+    
+    print("デバッグモードを開始しました")
+    print(f"サポートキー: 英字(26), 数字(10), スペース(1) = 計37キー")
     
     try:
         while True:
@@ -94,18 +102,33 @@ def run_debug_mode():
 
             # 実際のキー入力を処理
             key = keyboard_tracker.get_key_event()
-            if key and results.multi_hand_landmarks and current_nearest_key:
-                # データを収集
-                data_collector.add_sample(key, results.multi_hand_landmarks[0])
-                print(f"Pressed: {key}, Predicted: {current_nearest_key}")
+            if key:
+                total_keys_pressed += 1
                 
-                # 履歴に追加
-                raw_keystrokes.append(key)
-                predicted_keys.append(current_nearest_key)
-                
-                # 予測キーを表示用に保存
-                last_predicted_key = current_nearest_key
-                predicted_key_timer = predicted_key_duration
+                # サポートキーの統計
+                if KeyFormatter.is_supported_key(key):
+                    supported_keys_pressed += 1
+                    
+                    # サポートされているキーの場合のみ処理
+                    if results.multi_hand_landmarks and current_nearest_key:
+                        # データを収集
+                        data_collector.add_sample(key, results.multi_hand_landmarks[0])
+                        
+                        # コンソール出力も整形
+                        key_display = KeyFormatter.format_for_display(key)
+                        predicted_display = KeyFormatter.format_for_display(current_nearest_key)
+                        print(f"Pressed: {key_display}, Predicted: {predicted_display}")
+                        
+                        # 履歴に追加
+                        raw_keystrokes.append(key)
+                        predicted_keys.append(current_nearest_key)
+                        
+                        # 予測キーを表示用に保存
+                        last_predicted_key = current_nearest_key
+                        predicted_key_timer = predicted_key_duration
+                else:
+                    # サポートされていないキーの場合
+                    print(f"Unsupported key: {key} (ignored)")
 
             # タイマーを減らす
             if predicted_key_timer > 0:
@@ -118,14 +141,17 @@ def run_debug_mode():
                 fps_counter = 0
                 fps_start_time = time.time()
 
-            # 表示情報を辞書で準備
+            # サポート率の計算
+            support_rate = (supported_keys_pressed / total_keys_pressed * 100) if total_keys_pressed > 0 else 0
+
+            # 表示情報を辞書で準備（KeyFormatterで整形）
             info = {
-                'current_prediction': current_nearest_key if current_nearest_key else "None",
-                'last_prediction': last_predicted_key if predicted_key_timer > 0 else None,
-                'actual_history': ''.join(str(k) for k in raw_keystrokes[-10:]) if raw_keystrokes else "",
-                'predicted_history': ''.join(str(k) for k in predicted_keys[-10:]) if predicted_keys else "",
+                'current_prediction': KeyFormatter.format_for_display(current_nearest_key) if current_nearest_key else "None",
+                'last_prediction': KeyFormatter.format_for_display(last_predicted_key) if predicted_key_timer > 0 and last_predicted_key else None,
+                'actual_history': ''.join(KeyFormatter.format_for_test_history(k) for k in raw_keystrokes[-10:]) if raw_keystrokes else "",
+                'predicted_history': ''.join(KeyFormatter.format_for_test_history(k) for k in predicted_keys[-10:]) if predicted_keys else "",
                 'hand_detected': results.multi_hand_landmarks is not None,
-                'system_status': "Running",
+                'system_status': f"Debug (Support: {support_rate:.0f}%)",
                 'fps': current_fps
             }
             
@@ -134,10 +160,25 @@ def run_debug_mode():
             
             cv2.imshow('Debug Mode - Hand Tracking', frame)
             
-            if cv2.waitKey(1) & 0xFF == ord('q'):
+            if cv2.waitKey(1) & 0xFF == 27:  # ESCキー
                 break
     
     finally:
+        # 統計情報を表示
+        print(f"\n{'='*40}")
+        print(f"デバッグセッション終了")
+        print(f"{'='*40}")
+        print(f"総キー入力数: {total_keys_pressed}")
+        print(f"サポートキー入力数: {supported_keys_pressed}")
+        print(f"サポート率: {support_rate:.1f}%")
+        
+        if raw_keystrokes:
+            # 整形された履歴を表示
+            formatted_history = ''.join(KeyFormatter.format_for_test_history(k) for k in raw_keystrokes)
+            print(f"入力履歴: '{formatted_history}'")
+        
+        print(f"サポートキー詳細: {KeyFormatter.get_supported_keys_info()}")
+        
         # データを保存
         data_collector.save_to_file()
         camera.release()
