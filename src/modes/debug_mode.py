@@ -11,7 +11,7 @@ import os
 import json
 import time
 
-def run_debug_mode():
+def run_debug_mode(skip_mapping=False):
     # データ保存用ディレクトリの作成
     os.makedirs('data', exist_ok=True)
     camera = Camera()
@@ -28,10 +28,16 @@ def run_debug_mode():
     # DisplayManagerの初期化
     display_manager = DisplayManager()
     
-    # キーボードマップが存在しない場合、OCR検出を試みる
-    if not os.path.exists('keyboard_map.json'):
-        print("キーボードマップが見つかりません。手動キャリブレーションを開始します")
-        keyboard_map.setup_manual_calibration()
+    # マッピング処理
+    if not skip_mapping:
+        # --no-mapping未指定：常にマッピングを実行
+        print("キーボードマッピングを開始します")
+        if not keyboard_map.start_calibration():
+            print("エラー: キーボードマッピングに失敗しました")
+            return
+    else:
+        # --no-mapping指定時：既存ファイルの存在は main.py で確認済み
+        print("マッピングをスキップし、既存のキーボード座標を使用します")
     
     keyboard_tracker.start()
 
@@ -58,6 +64,10 @@ def run_debug_mode():
     
     print("デバッグモードを開始しました")
     print(f"サポートキー: 英字(26), 数字(10), スペース(1) = 計37キー")
+    if skip_mapping:
+        print("マッピングモード: スキップ (既存座標使用)")
+    else:
+        print("マッピングモード: 実行済み")
     print("ESCキーで終了します")
     
     try:
@@ -152,7 +162,7 @@ def run_debug_mode():
                 'actual_history': ''.join(KeyFormatter.format_for_test_history(k) for k in raw_keystrokes[-10:]) if raw_keystrokes else "",
                 'predicted_history': ''.join(KeyFormatter.format_for_test_history(k) for k in predicted_keys[-10:]) if predicted_keys else "",
                 'hand_detected': results.multi_hand_landmarks is not None,
-                'system_status': f"Debug (Support: {support_rate:.0f}%)",
+                'system_status': f"Debug (Support: {support_rate:.0f}%) {'[NO-MAP]' if skip_mapping else '[GEMINI]'}",
                 'fps': current_fps
             }
             
@@ -170,6 +180,7 @@ def run_debug_mode():
         print(f"\n{'='*40}")
         print(f"デバッグセッション終了")
         print(f"{'='*40}")
+        print(f"マッピングモード: {'スキップ' if skip_mapping else '実行済み'}")
         print(f"総キー入力数: {total_keys_pressed}")
         print(f"サポートキー入力数: {supported_keys_pressed}")
         print(f"サポート率: {support_rate:.1f}%")

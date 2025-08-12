@@ -11,7 +11,7 @@ import os
 import json
 import time
 
-def run_test_mode(test_text):
+def run_test_mode(test_text, skip_mapping=False):
     # テスト文字列の検証
     valid_chars = set()
     for char in test_text:
@@ -41,10 +41,16 @@ def run_test_mode(test_text):
     # DisplayManagerの初期化
     display_manager = DisplayManager()
     
-    # キーボードマップが存在しない場合、OCR検出を試みる
-    if not os.path.exists('keyboard_map.json'):
-        print("キーボードマップが見つかりません。手動キャリブレーションを開始します")
-        keyboard_map.setup_manual_calibration()
+    # マッピング処理
+    if not skip_mapping:
+        # --no-mapping未指定：常にマッピングを実行
+        print("キーボードマッピングを開始します")
+        if not keyboard_map.start_calibration():
+            print("エラー: キーボードマッピングに失敗しました")
+            return
+    else:
+        # --no-mapping指定時：既存ファイルの存在は main.py で確認済み
+        print("マッピングをスキップし、既存のキーボード座標を使用します")
     
     keyboard_tracker.start()
 
@@ -82,6 +88,10 @@ def run_test_mode(test_text):
     
     print(f"テストを開始します。「{test_text}」を入力してください。")
     print(f"システムが正しく予測できるかをテストします（どのキーを押してもOK）")
+    if skip_mapping:
+        print("マッピングモード: スキップ (既存座標使用)")
+    else:
+        print("マッピングモード: 実行済み")
     print("ESCキーで終了します")
     
     try:
@@ -212,7 +222,7 @@ def run_test_mode(test_text):
                 'actual_history': ''.join(KeyFormatter.format_for_test_history(k) for k in raw_keystrokes[-10:]) if raw_keystrokes else "",
                 'predicted_history': ''.join(KeyFormatter.format_for_test_history(k) for k in predicted_keys[-10:]) if predicted_keys else "",
                 'hand_detected': results.multi_hand_landmarks is not None,
-                'system_status': f"Test (Support: {valid_rate:.0f}%)",
+                'system_status': f"Test (Support: {valid_rate:.0f}%) {'[NO-MAP]' if skip_mapping else '[GEMINI]'}",
                 'fps': current_fps
             }
             
@@ -255,6 +265,7 @@ def run_test_mode(test_text):
                 'total_characters': len(test_text),
                 'completed_characters': len(experiment_results),
                 'timestamp': timestamp,
+                'mapping_mode': 'skipped' if skip_mapping else 'executed',
                 'key_statistics': {
                     'total_keys_pressed': total_keys_pressed,
                     'valid_keys_pressed': valid_keys_pressed,
@@ -276,6 +287,7 @@ def run_test_mode(test_text):
                 print(f"\n{'='*60}")
                 print(f"テスト結果サマリー")
                 print(f"{'='*60}")
+                print(f"マッピングモード: {'スキップ' if skip_mapping else '実行済み'}")
                 print(f"テスト文字列: '{test_text}'")
                 print(f"完了文字数: {total_predictions}/{len(test_text)}")
                 print(f"予測精度: {accuracy:.1f}% ({correct_predictions}/{total_predictions})")
