@@ -11,6 +11,8 @@ def parse_args():
                         help='テストモード時のテスト文字列 (default: "hello world")')
     parser.add_argument('--no-mapping', action='store_true',
                         help='マッピングをスキップして既存のキーボード座標を使用')
+    parser.add_argument('--gemini-v2', action='store_true',
+                   help='改善版Gemini検出を使用')
     return parser.parse_args()
 
 def check_keyboard_mapping_exists():
