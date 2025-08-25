@@ -1,0 +1,37 @@
+# 学習システム設定ファイル
+# config/learning_config.yaml
+
+# データ収集設定
+data_collection:
+  trajectory_buffer_size: 30 # 軌跡バッファサイズ（フレーム数）
+  min_samples_for_training: 10 # 学習に必要な最小サンプル数
+  max_session_duration: 3600 # 最大セッション時間（秒）
+
+# 学習設定
+training:
+  epochs: 100 # エポック数
+  batch_size: 32 # バッチサイズ
+  learning_rate: 0.001 # 学習率
+  early_stopping_patience: 10 # 早期停止のパテンス
+  validation_split: 0.2 # 検証データの割合
+
+# モデル設定
+model:
+  input_size: 63 # 入力特徴量次元（21点 × 3座標）
+  hidden_size: 64 # LSTM隠れ層サイズ
+  num_layers: 2 # LSTM層数
+  num_classes: 37 # 分類クラス数（37キー）
+  dropout: 0.2 # ドロップアウト率
+
+# パス設定
+paths:
+  data_dir: "data" # データ保存ディレクトリ
+  models_dir: "data/models" # モデル保存ディレクトリ
+  logs_dir: "logs" # ログ保存ディレクトリ
+
+# UI設定
+ui:
+  show_trajectory: true # 軌跡表示のデフォルト
+  show_predictions: true # 予測表示のデフォルト
+  fps_display: true # FPS表示のデフォルト
+  progress_display: true # 進捗表示のデフォルト

@@ -66,29 +66,28 @@ keyboard-assist-research/
 │   ├── input/
 │   │   ├── __init__.py
 │   │   ├── keyboard_tracker.py  # キー入力監視
-│   │   └── keyboard_map.py      # キーボードマッピング
+│   │   ├── keyboard_map.py      # キーボードマッピング
+│   │   ├── data_collector.py    # 基本データ収集
+│   │   └── calibration/         # キャリブレーション
+│   │       ├── __init__.py
+│   │       ├── simple_mapper.py # 4点クリック方式
+│   │       └── templates.py     # テンプレート
 │   ├── processing/
 │   │   ├── __init__.py
+│   │   ├── enhanced_data_collector.py # 拡張データ収集
 │   │   ├── filters/
 │   │   │   ├── __init__.py
 │   │   │   ├── base_filter.py   # フィルター基底クラス
-│   │   │   ├── moving_average.py # 移動平均フィルター
-│   │   │   ├── kalman_filter.py # カルマンフィルター
-│   │   │   └── savitzky_golay.py # Savitzky-Golayフィルター
+│   │   │   └── moving_average.py # 移動平均フィルター
 │   │   └── models/              # 機械学習モデル
 │   │       ├── __init__.py
-│   │       ├── base_model.py    # モデル基底クラス
-│   │       ├── lstm_model.py    # LSTMモデル
-│   │       ├── gru_model.py     # GRUモデル
-│   │       └── attention.py     # Attention機構
-│   ├── data/
-│   │   ├── __init__.py
-│   │   ├── collector.py         # データ収集
-│   │   └── exporter.py          # データ出力
+│   │       ├── hand_lstm.py     # LSTMモデル
+│   │       └── model.py         # 基底モデル
 │   ├── modes/
 │   │   ├── __init__.py
 │   │   ├── debug_mode.py        # デバッグモード
-│   │   └── test_mode.py         # テストモード
+│   │   ├── test_mode.py         # テストモード
+│   │   └── learning_mode.py     # 学習モード
 │   ├── ui/
 │   │   ├── __init__.py
 │   │   ├── display_manager.py   # 表示統合管理
@@ -97,7 +96,7 @@ keyboard-assist-research/
 │   └── utils/
 │       ├── __init__.py
 │       ├── logger.py            # ログ管理
-│       └── metrics.py           # 評価指標計算
+│       └── utils.py             # ユーティリティ
 ├── data/
 │   ├── raw/                     # 生データ
 │   ├── processed/               # 処理済みデータ
@@ -109,20 +108,57 @@ keyboard-assist-research/
 1. リアルタイムの手の動き認識
 2. キーボード入力の意図推定
 3. 入力の自動修正
+4. 手の軌跡データの学習・予測
+5. 個人別モデルの継続学習
 
 ## モデルについて
 
 - 手の動き認識：MediaPipe Hands
 - 意図推定：LSTM/GRU ベースのカスタムモデル
 - 文脈考慮：自然言語処理による補助
+- 学習モデル：PyTorch ベースの LSTM（BasicHandLSTM）
+- データ収集：拡張データ収集システム（EnhancedDataCollector）
 
 ## 研究目的
 
 運動機能障害を持つユーザーのデジタルアクセシビリティを向上させ、より正確なキーボード入力を支援する。
 
+## 使用方法
+
+### 基本的な実行
+
+```bash
+# デバッグモード（デフォルト）
+python main.py
+
+# テストモード
+python main.py --mode test --text "hello world"
+
+# 学習モード
+python main.py --mode learning --text "hello world" --user-id "user_001"
+```
+
+### 学習モードの操作
+
+学習モードでは以下の操作が可能です：
+
+- **SPACE**: データ収集の開始/停止
+- **L**: 学習の実行（最低 10 サンプル必要）
+- **T**: 軌跡表示の切り替え
+- **P**: 予測表示の切り替え
+- **ESC**: 終了
+
+### データ収集と学習
+
+1. 学習モードを開始
+2. 手をカメラに映して目標テキストを入力
+3. 手の軌跡データが自動的に収集される
+4. 十分なデータが集まったら学習を実行
+5. 個人別モデルが保存される
+
 ## 開発環境
 
-- OS: macOS
+- OS: macOS / Windows
 - Python: 3.9+
 - IDE: VSCode 推奨
 
