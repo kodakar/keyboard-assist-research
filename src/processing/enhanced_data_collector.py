@@ -11,6 +11,7 @@ from datetime import datetime
 from collections import deque
 import cv2
 from typing import List, Dict, Optional, Tuple
+from src.processing.coordinate_transformer import CoordinateTransformer
 
 class EnhancedDataCollector:
     def __init__(self, 
@@ -29,8 +30,14 @@ class EnhancedDataCollector:
         self.data_dir = os.path.abspath(data_dir)
         self.user_id = user_id
         
+        # 座標変換クラスの初期化
+        self.coordinate_transformer = CoordinateTransformer()
+        
         # 手の軌跡をバッファ（時系列データ）
         self.trajectory_buffer = deque(maxlen=trajectory_buffer_size)
+        
+        # 前フレームの座標（速度計算用）
+        self.previous_coords = None
         
         # 現在の入力コンテキスト
         self.current_context = ""
@@ -90,7 +97,7 @@ class EnhancedDataCollector:
     
     def add_hand_position(self, hand_landmarks, frame_timestamp: Optional[float] = None):
         """
-        手の位置を軌跡バッファに追加
+        手の位置を軌跡バッファに追加（相対座標系）
         
         Args:
             hand_landmarks: MediaPipeの手のランドマーク
@@ -99,21 +106,129 @@ class EnhancedDataCollector:
         if not self.is_collecting:
             return
         
-        # ランドマークを配列に変換（21点 × 3座標 = 63次元）
-        landmarks_array = []
-        for landmark in hand_landmarks.landmark:
-            landmarks_array.extend([landmark.x, landmark.y, landmark.z])
-        
-        # 軌跡データをバッファに追加
-        trajectory_point = {
-            'timestamp': frame_timestamp or datetime.now().timestamp(),
-            'landmarks': landmarks_array,
-            'frame_index': len(self.trajectory_buffer)
-        }
-        
-        self.trajectory_buffer.append(trajectory_point)
+        try:
+            # 重要なランドマークの座標を取得（0-1正規化）
+            index_finger = hand_landmarks.landmark[8]  # 人差し指の先端
+            middle_finger = hand_landmarks.landmark[12]  # 中指の先端
+            wrist = hand_landmarks.landmark[0]  # 手首
+            
+            # キーボード空間座標に変換
+            kb_coords = {}
+            for name, landmark in [("index_finger", index_finger), 
+                                  ("middle_finger", middle_finger), 
+                                  ("wrist", wrist)]:
+                # ピクセル座標をキーボード空間座標に変換
+                kb_coord = self.coordinate_transformer.pixel_to_keyboard_space(
+                    landmark.x, landmark.y
+                )
+                if kb_coord:
+                    kb_coords[name] = {"x": kb_coord[0], "y": kb_coord[1]}
+                else:
+                    # 変換失敗時は元の座標を使用
+                    kb_coords[name] = {"x": landmark.x, "y": landmark.y}
+            
+            # 人差し指の位置から最近傍キーと相対座標を取得
+            nearest_keys_info = []
+            if "index_finger" in kb_coords:
+                index_x = kb_coords["index_finger"]["x"]
+                index_y = kb_coords["index_finger"]["y"]
+                
+                nearest_keys = self.coordinate_transformer.get_nearest_keys_with_relative_coords(
+                    index_x, index_y, top_k=3
+                )
+                
+                for key_info in nearest_keys:
+                    # 速度計算
+                    approach_velocity = self._calculate_approach_velocity(
+                        index_x, index_y, key_info.key, frame_timestamp
+                    )
+                    
+                    nearest_keys_info.append({
+                        "key": key_info.key,
+                        "relative_x": key_info.relative_x,
+                        "relative_y": key_info.relative_y,
+                        "distance": np.sqrt(key_info.relative_x**2 + key_info.relative_y**2),
+                        "approach_velocity": approach_velocity
+                    })
+            
+            # 軌跡データを作成
+            trajectory_point = {
+                "timestamp": frame_timestamp or datetime.now().timestamp(),
+                "frame_index": len(self.trajectory_buffer),
+                "keyboard_space_coords": kb_coords,
+                "nearest_keys_relative": nearest_keys_info
+            }
+            
+            # 前フレームの座標を更新（速度計算用）
+            self.previous_coords = {
+                "index_finger": (index_finger.x, index_finger.y),
+                "timestamp": frame_timestamp or datetime.now().timestamp()
+            }
+            
+            # 軌跡データをバッファに追加
+            self.trajectory_buffer.append(trajectory_point)
+            
+        except Exception as e:
+            print(f"⚠️ 手の位置追加エラー: {e}")
+            # エラー時は元の形式で保存
+            landmarks_array = []
+            for landmark in hand_landmarks.landmark:
+                landmarks_array.extend([landmark.x, landmark.y, landmark.z])
+            
+            trajectory_point = {
+                'timestamp': frame_timestamp or datetime.now().timestamp(),
+                'landmarks': landmarks_array,
+                'frame_index': len(self.trajectory_buffer)
+            }
+            self.trajectory_buffer.append(trajectory_point)
     
-    def add_key_sample(self, intended_key: str, actual_key: str, 
+    def _calculate_approach_velocity(self, current_x: float, current_y: float, 
+                                   target_key: str, current_timestamp: float) -> float:
+        """
+        指定キーへの接近速度を計算（キーサイズ/秒）
+        
+        Args:
+            current_x: 現在のX座標（キーボード空間）
+            current_y: 現在のY座標（キーボード空間）
+            target_key: 目標キー
+            current_timestamp: 現在のタイムスタンプ
+            
+        Returns:
+            接近速度（キーサイズ/秒）
+        """
+        if self.previous_coords is None:
+            return 0.0
+        
+        try:
+            # 前フレームの座標を取得
+            prev_x, prev_y = self.previous_coords["index_finger"]
+            prev_timestamp = self.previous_coords["timestamp"]
+            
+            # 時間差を計算
+            time_diff = current_timestamp - prev_timestamp
+            if time_diff <= 0:
+                return 0.0
+            
+            # 前フレームの座標をキーボード空間に変換
+            prev_kb_coord = self.coordinate_transformer.pixel_to_keyboard_space(prev_x, prev_y)
+            if prev_kb_coord is None:
+                return 0.0
+            
+            prev_kb_x, prev_kb_y = prev_kb_coord
+            
+            # 距離の変化を計算
+            distance_diff = np.sqrt((current_x - prev_kb_x)**2 + (current_y - prev_kb_y)**2)
+            
+            # 速度を計算（キーサイズ/秒）
+            velocity = distance_diff / time_diff
+            
+            return velocity
+            
+        except Exception as e:
+            print(f"⚠️ 速度計算エラー: {e}")
+            return 0.0
+    
+    def add_key_sample(self, intended_key: str, actual_key: str,
                       hand_landmarks, target_text: str = ""):
         """
         キー入力サンプルを記録
@@ -139,7 +254,7 @@ class EnhancedDataCollector:
         if len(self.trajectory_buffer) >= self.trajectory_buffer_size:
             trajectory_data = list(self.trajectory_buffer)
         
-        # サンプルデータを作成
+        # サンプルデータを作成（相対座標系）
         sample = {
             'timestamp': datetime.now().isoformat(),
             'user_id': self.user_id,
@@ -148,10 +263,11 @@ class EnhancedDataCollector:
             'actual_key': actual_key,
             'current_context': self.current_context,
             'hand_landmarks': self._landmarks_to_array(hand_landmarks),
-            'landmarks_format': 'array_63d',  # 21点 × 3座標
+            'landmarks_format': 'array_63d',  # 21点 × 3座標（後方互換性）
             'trajectory_data': trajectory_data,
             'trajectory_length': len(self.trajectory_buffer),
-            'session_duration': (datetime.now() - self.collection_start_time).total_seconds()
+            'session_duration': (datetime.now() - self.collection_start_time).total_seconds(),
+            'coordinate_system': 'relative_keyboard_space'  # 座標系の指定
         }
         
         # サンプルを保存
@@ -168,6 +284,28 @@ class EnhancedDataCollector:
         
         print(f"📝 サンプル記録: {intended_key} -> {actual_key} "
               f"(軌跡: {len(self.trajectory_buffer)}フレーム)")
+    
+    def set_screen_size(self, width: int, height: int):
+        """
+        画面サイズを設定（座標変換に使用）
+        
+        Args:
+            width: 画面幅（ピクセル）
+            height: 画面高さ（ピクセル）
+        """
+        self.coordinate_transformer.set_screen_size(width, height)
+        print(f"✅ 画面サイズを設定しました: {width}x{height}")
+    
+    def set_keyboard_corners(self, corners: np.ndarray):
+        """
+        キーボードの4隅の座標を設定
+        
+        Args:
+            corners: 4隅の座標 (左上, 右上, 右下, 左下) の配列
+                    各座標は (x, y) の形式で、0-1の正規化座標
+        """
+        self.coordinate_transformer.set_keyboard_corners(corners)
+        print(f"✅ キーボードの4隅を設定しました")
     
     def _landmarks_to_array(self, hand_landmarks) -> List[float]:
         """手のランドマークを配列に変換"""
