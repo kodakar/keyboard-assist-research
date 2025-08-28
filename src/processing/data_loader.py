@@ -14,6 +14,7 @@ from collections import Counter
 import random
 from sklearn.model_selection import train_test_split
 import warnings
+from .feature_extractor import FeatureExtractor
 
 
 class KeyboardIntentDataset(Dataset):
@@ -188,8 +189,11 @@ class KeyboardIntentDataset(Dataset):
         """
         sample = self.samples[idx]
         
-        # 特徴量を抽出
-        features = self._extract_features(sample)
+        # 特徴量を抽出（共通抽出器）
+        if not hasattr(self, '_feature_extractor'):
+            self._feature_extractor = FeatureExtractor(sequence_length=self.sequence_length, fps=30.0)
+        features_np = self._feature_extractor.extract_from_trajectory(sample.get('trajectory_data', []))
+        features = torch.FloatTensor(features_np)
         
         # ラベルを取得
         target_char = sample.get('target_char', '').lower()
@@ -202,83 +206,14 @@ class KeyboardIntentDataset(Dataset):
         return features, label
     
     def _extract_features(self, sample: Dict) -> torch.FloatTensor:
-        """サンプルから特徴量を抽出"""
-        trajectory_data = sample.get('trajectory_data', [])
-        
-        # 特徴量の初期化
-        features = np.zeros((self.sequence_length, self.feature_dim))
-        
-        # 軌跡データから特徴量を抽出
-        for i, frame_data in enumerate(trajectory_data):
-            if i >= self.sequence_length:
-                break
-            
-            # キーボード空間での指の座標（2次元）
-            kb_coords = frame_data.get('keyboard_space_coords', {})
-            index_finger = kb_coords.get('index_finger', {})
-            finger_x = index_finger.get('x', 0.0)
-            finger_y = index_finger.get('y', 0.0)
-            
-            # 最近傍3キーへの相対座標（6次元）
-            nearest_keys = frame_data.get('nearest_keys_relative', [])
-            relative_coords = np.zeros(6)
-            for j, key_info in enumerate(nearest_keys[:3]):
-                if j < 3:
-                    relative_coords[j*2] = key_info.get('relative_x', 0.0)
-                    relative_coords[j*2+1] = key_info.get('relative_y', 0.0)
-            
-            # 最近傍3キーへの距離（3次元）
-            distances = np.zeros(3)
-            for j, key_info in enumerate(nearest_keys[:3]):
-                if j < 3:
-                    distances[j] = key_info.get('distance', 0.0)
-            
-            # 速度・加速度（4次元）
-            velocities = np.zeros(4)
-            if i > 0 and i < len(trajectory_data) - 1:
-                # 前フレームとの差分から速度を計算
-                prev_frame = trajectory_data[i-1]
-                next_frame = trajectory_data[i+1]
-                
-                prev_coords = prev_frame.get('keyboard_space_coords', {}).get('index_finger', {})
-                next_coords = next_frame.get('keyboard_space_coords', {}).get('index_finger', {})
-                
-                if prev_coords and next_coords:
-                    # 速度（X, Y方向）
-                    velocities[0] = (finger_x - prev_coords.get('x', finger_x)) * 30  # 30fps
-                    velocities[1] = (finger_y - prev_coords.get('y', finger_y)) * 30
-                    
-                    # 加速度（X, Y方向）
-                    velocities[2] = (next_coords.get('x', finger_x) - 2*finger_x + prev_coords.get('x', finger_x)) * 30**2
-                    velocities[3] = (next_coords.get('y', finger_y) - 2*finger_y + prev_coords.get('y', finger_y)) * 30**2
-            
-            # 特徴量を結合
-            features[i] = np.concatenate([
-                [finger_x, finger_y],      # 2次元
-                relative_coords,           # 6次元
-                distances,                 # 3次元
-                velocities                 # 4次元
-            ])
-        
-        # 正規化
-        features = self._normalize_features(features)
-        
-        return torch.FloatTensor(features)
+        """後方互換のため残す（内部でFeatureExtractorを呼ぶ）"""
+        if not hasattr(self, '_feature_extractor'):
+            self._feature_extractor = FeatureExtractor(sequence_length=self.sequence_length, fps=30.0)
+        features_np = self._feature_extractor.extract_from_trajectory(sample.get('trajectory_data', []))
+        return torch.FloatTensor(features_np)
     
     def _normalize_features(self, features: np.ndarray) -> np.ndarray:
-        """特徴量の正規化"""
-        # 座標系の正規化（0-1の範囲に収める）
-        features[:, :2] = np.clip(features[:, :2], 0.0, 1.0)
-        
-        # 相対座標の正規化（-5から5の範囲に収める）
-        features[:, 2:8] = np.clip(features[:, 2:8], -5.0, 5.0)
-        
-        # 距離の正規化（0から10の範囲に収める）
-        features[:, 8:11] = np.clip(features[:, 8:11], 0.0, 10.0)
-        
-        # 速度・加速度の正規化（-5から5の範囲に収める）
-        features[:, 11:] = np.clip(features[:, 11:], -5.0, 5.0)
-        
+        """非推奨（FeatureExtractorに移管済み）。互換のため残置。"""
         return features
     
     def _augment_features(self, features: torch.FloatTensor) -> torch.FloatTensor:

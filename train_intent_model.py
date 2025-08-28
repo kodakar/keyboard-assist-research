@@ -375,6 +375,15 @@ class IntentModelTrainer:
     def save_model(self, filename: str, epoch: int, val_loss: float, val_acc: float):
         """モデルの保存"""
         filepath = os.path.join(self.model_save_path, filename)
+        # ラベルマップ（インデックスとキーの対応）
+        label_map = list(self.train_loader.dataset.KEY_CHARS)
+        # 併せてJSONとしても保存（可搬性向上）
+        label_map_file = os.path.join(self.model_save_path, 'label_map.json')
+        try:
+            with open(label_map_file, 'w', encoding='utf-8') as f:
+                json.dump({'labels': label_map}, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            print(f"⚠️ label_map.json の保存に失敗: {e}")
         
         torch.save({
             'epoch': epoch,
@@ -400,7 +409,8 @@ class IntentModelTrainer:
                 'batch_size': self.batch_size,
                 'learning_rate': self.learning_rate,
                 'data_dir': self.data_dir
-            }
+            },
+            'label_map': label_map
         }, filepath)
     
     def save_final_results(self, predictions: list, labels: list):

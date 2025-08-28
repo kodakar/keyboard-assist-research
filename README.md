@@ -87,7 +87,7 @@ keyboard-assist-research/
 │   │   ├── __init__.py
 │   │   ├── debug_mode.py        # デバッグモード
 │   │   ├── test_mode.py         # テストモード
-│   │   └── learning_mode.py     # 学習モード
+│   │   └── prediction_mode.py   # 予測モード（学習済みモデル使用）
 │   ├── ui/
 │   │   ├── __init__.py
 │   │   ├── display_manager.py   # 表示統合管理
@@ -125,28 +125,22 @@ keyboard-assist-research/
 
 ## 使用方法
 
-### 基本的な実行
+### 基本的な実行（現行フロー）
 
 ```bash
-# デバッグモード（デフォルト）
-python main.py
+# データ収集（実運用フロー）
+python collect_training_data.py --user-id user_001 --session-text "hello world" --repetitions 5
 
-# テストモード
-python main.py --mode test --text "hello world"
+# 学習
+python train_intent_model.py --data-dir data/training/user_001 --epochs 50
 
-# 学習モード
-python main.py --mode learning --text "hello world" --user-id "user_001"
+# 予測モード
+python src/modes/prediction_mode.py
 ```
 
-### 学習モードの操作
+### 備考
 
-学習モードでは以下の操作が可能です：
-
-- **SPACE**: データ収集の開始/停止
-- **L**: 学習の実行（最低 10 サンプル必要）
-- **T**: 軌跡表示の切り替え
-- **P**: 予測表示の切り替え
-- **ESC**: 終了
+- 旧 `learning_mode.py` はフロー統一のため廃止しました。以後は上記の分離フロー（収集 → 学習 → 予測）をご使用ください。
 
 ### データ収集と学習
 

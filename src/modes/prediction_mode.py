@@ -19,6 +19,7 @@ from src.core.hand_tracker import HandTracker
 from src.input.keyboard_map import KeyboardMap
 from src.processing.coordinate_transformer import CoordinateTransformer
 from src.processing.models.hand_lstm import BasicHandLSTM
+from src.processing.feature_extractor import FeatureExtractor
 
 
 class PredictionMode:
@@ -63,12 +64,10 @@ class PredictionMode:
         self.fps = 0
         self.last_fps_time = time.time()
         
-        # 37キーの定義
-        self.KEY_CHARS = (
-            'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm',
-            'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z',
-            '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', ' '
-        )
+        # ラベルマップ（学習時に保存したものを使用）
+        self.KEY_CHARS = None
+        self.label_map_loaded = False
+        self.feature_extractor = FeatureExtractor(sequence_length=60, fps=30.0)
         
         print(f"🎯 予測モード初期化完了")
         print(f"   モデルパス: {model_path}")
@@ -141,6 +140,24 @@ class PredictionMode:
             hidden_size = model_config.get('hidden_size', 128)
             num_classes = model_config.get('num_classes', 37)
             
+            # ラベルマップの読み込み（チェックポイント or JSON）
+            self.KEY_CHARS = checkpoint.get('label_map')
+            if self.KEY_CHARS is None:
+                # フォールバック: 同ディレクトリのlabel_map.json
+                label_map_path = os.path.join(os.path.dirname(self.model_path), 'label_map.json')
+                if os.path.exists(label_map_path):
+                    with open(label_map_path, 'r', encoding='utf-8') as f:
+                        self.KEY_CHARS = json.load(f).get('labels')
+            if self.KEY_CHARS is None:
+                # 最後のフォールバック（従来定義）
+                self.KEY_CHARS = (
+                    'a','b','c','d','e','f','g','h','i','j','k','l','m',
+                    'n','o','p','q','r','s','t','u','v','w','x','y','z',
+                    '0','1','2','3','4','5','6','7','8','9',' '
+                )
+            else:
+                self.label_map_loaded = True
+
             # モデルの初期化
             self.model = BasicHandLSTM(
                 input_size=input_size,
@@ -169,7 +186,7 @@ class PredictionMode:
             return False
     
     def extract_features(self, hand_landmarks) -> Optional[np.ndarray]:
-        """手のランドマークから特徴量を抽出"""
+        """手のランドマークから特徴量を抽出（共通抽出器に合わせた1フレーム分）"""
         try:
             # キーボード空間での指の座標を取得
             index_finger = hand_landmarks.landmark[8]  # 人差し指先端
@@ -189,43 +206,28 @@ class PredictionMode:
                 kb_x, kb_y, top_k=3
             )
             
-            # 特徴量の構築（15次元）
-            features = np.zeros(15)
-            
-            # キーボード空間での指の座標（2次元）
-            features[0] = kb_x
-            features[1] = kb_y
-            
-            # 最近傍3キーへの相対座標（6次元）
-            for i, key_info in enumerate(nearest_keys[:3]):
-                if i < 3:
-                    features[2 + i*2] = key_info.relative_x
-                    features[2 + i*2 + 1] = key_info.relative_y
-            
-            # 最近傍3キーへの距離（3次元）
-            for i, key_info in enumerate(nearest_keys[:3]):
-                if i < 3:
-                    features[8 + i] = key_info.distance
-            
-            # 速度・加速度（4次元）- 前フレームとの差分から計算
-            if len(self.frame_buffer) > 0:
-                prev_features = self.frame_buffer[-1]
-                if prev_features is not None:
-                    # 速度（X, Y方向）
-                    features[11] = (kb_x - prev_features[0]) * 30  # 30fps
-                    features[12] = (kb_y - prev_features[1]) * 30
-                    
-                    # 加速度（X, Y方向）
-                    if len(self.frame_buffer) > 1:
-                        prev_prev_features = self.frame_buffer[-2]
-                        if prev_prev_features is not None:
-                            features[13] = (prev_features[0] - 2*kb_x + prev_prev_features[0]) * 30**2
-                            features[14] = (prev_features[1] - 2*kb_y + prev_prev_features[1]) * 30**2
-            
-            # 特徴量の正規化
-            features = self.normalize_features(features)
-            
-            return features
+            # 共通仕様のフレーム辞書を組み立てて1フレーム分抽出
+            frame_dict = {
+                'keyboard_space_coords': {
+                    'index_finger': {'x': kb_x, 'y': kb_y}
+                },
+                'nearest_keys_relative': [
+                    {
+                        'key': k.key,
+                        'relative_x': k.relative_x,
+                        'relative_y': k.relative_y,
+                        'distance': np.sqrt(k.relative_x**2 + k.relative_y**2)
+                    } for k in nearest_keys[:3]
+                ]
+            }
+
+            # 直近バッファから速度・加速度は共通抽出器側で計算するため
+            # ここでは単フレームを返し、バッファ側で60フレームの配列を作る
+            # ただし予測処理は従来のframe_bufferを維持
+
+            # 単フレームの15次元化のため一時的に抽出器を使う
+            features_np = self.feature_extractor.extract_from_trajectory([frame_dict])
+            return features_np[0]
             
         except Exception as e:
             print(f"⚠️ 特徴量抽出エラー: {e}")
