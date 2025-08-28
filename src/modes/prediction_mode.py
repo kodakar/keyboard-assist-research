@@ -303,6 +303,7 @@ class PredictionMode:
                 
                 # 手の検出
                 results = self.hand_tracker.detect_hands(frame)
+                self.last_results = results  # 結果を保存
                 
                 if results.multi_hand_landmarks:
                     hand_landmarks = results.multi_hand_landmarks[0]
@@ -364,8 +365,8 @@ class PredictionMode:
         h, w = frame.shape[:2]
         
         # 手のランドマークを描画
-        if hasattr(self, 'hand_tracker') and hasattr(self, 'hand_tracker'):
-            frame = self.hand_tracker.draw_landmarks(frame, getattr(self, 'results', None))
+        if hasattr(self, 'hand_tracker') and hasattr(self, 'last_results'):
+            frame = self.hand_tracker.draw_landmarks(frame, self.last_results)
         
         # キーボードマップを可視化
         if self.keyboard_map:

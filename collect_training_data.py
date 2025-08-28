@@ -115,6 +115,16 @@ class TrainingDataCollector:
             # データ収集の初期化
             self.data_collector = EnhancedDataCollector(user_id=self.user_id)
             self.data_collector.set_screen_size(width, height)
+            
+            # キーボードの4隅を設定
+            keyboard_corners = self.keyboard_map.get_keyboard_corners()
+            if keyboard_corners is not None:
+                self.data_collector.set_keyboard_corners(keyboard_corners)
+                print("✅ キーボードの4隅を設定しました")
+            else:
+                print("⚠️ キーボードの4隅の取得に失敗しました")
+                return False
+            
             print("✅ データ収集初期化完了")
             
             return True
@@ -165,7 +175,7 @@ class TrainingDataCollector:
         self.data_collector.start_collection_session(self.session_text)
         self.current_char_index = 0
         self.is_collecting = True
-        self.collection_start_time = time.time()
+        self.collection_start_time = datetime.now()  # time.time()ではなくdatetime.now()
         
         # 文字入力ループ
         while self.current_char_index < len(self.session_text):
@@ -199,7 +209,7 @@ class TrainingDataCollector:
                 return False
             
             frame_count += 1
-            current_time = time.time()
+            current_time = datetime.now()  # time.time()ではなくdatetime.now()
             
             # 手の検出
             results = self.hand_tracker.detect_hands(frame)
@@ -207,7 +217,7 @@ class TrainingDataCollector:
             # 手の軌跡データを収集
             if results.multi_hand_landmarks:
                 hand_landmarks = results.multi_hand_landmarks[0]
-                self.data_collector.add_hand_position(hand_landmarks, current_time)
+                self.data_collector.add_hand_position(hand_landmarks, current_time.timestamp())
                 
                 # 手のランドマークを描画
                 self.hand_tracker.draw_landmarks(frame, results)
@@ -241,7 +251,7 @@ class TrainingDataCollector:
         
         return True
     
-    def _process_keyboard_input(self, input_key: str, target_key: str, timestamp: float) -> bool:
+    def _process_keyboard_input(self, input_key: str, target_key: str, timestamp: datetime) -> bool:
         """キーボード入力を処理"""
         print(f"   入力検出: '{input_key}' (目標: '{target_key}')")
         

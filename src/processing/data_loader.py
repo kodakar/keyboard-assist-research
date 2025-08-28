@@ -276,8 +276,8 @@ class KeyboardIntentDataset(Dataset):
         # 距離の正規化（0から10の範囲に収める）
         features[:, 8:11] = np.clip(features[:, 8:11], 0.0, 10.0)
         
-        # 速度・加速度の正規化（-2から2の範囲に収める）
-        features[:, 11:] = np.clip(features[:, 11:], -2.0, 2.0)
+        # 速度・加速度の正規化（-5から5の範囲に収める）
+        features[:, 11:] = np.clip(features[:, 11:], -5.0, 5.0)
         
         return features
     

@@ -73,6 +73,43 @@ class KeyboardMap:
             print(f"エラー: キーマップの保存に失敗しました: {e}")
             return False
     
+    def get_keyboard_corners(self):
+        """キーボードの4隅の座標を返す"""
+        if not self.key_positions:
+            return None
+        
+        try:
+            # 全キーから外接矩形を計算
+            all_x = []
+            all_y = []
+            
+            for pos in self.key_positions.values():
+                if isinstance(pos, dict):
+                    # 新しい形式（center_x, center_y）と旧形式（x, y）の両方に対応
+                    if 'center_x' in pos and 'center_y' in pos:
+                        all_x.append(pos['center_x'])
+                        all_y.append(pos['center_y'])
+                    elif 'x' in pos and 'y' in pos:
+                        all_x.append(pos['x'])
+                        all_y.append(pos['y'])
+            
+            if not all_x or not all_y:
+                return None
+            
+            # 4隅の座標を計算
+            corners = np.array([
+                [min(all_x), min(all_y)],  # 左上
+                [max(all_x), min(all_y)],  # 右上
+                [max(all_x), max(all_y)],  # 右下
+                [min(all_x), max(all_y)]   # 左下
+            ], dtype=np.float32)
+            
+            return corners
+            
+        except Exception as e:
+            print(f"⚠️ キーボードコーナーの計算エラー: {e}")
+            return None
+    
     def load_map(self):
         """JSONファイルからキーマップを読み込み"""
         try:

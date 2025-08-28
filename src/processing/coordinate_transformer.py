@@ -110,8 +110,15 @@ class CoordinateTransformer:
             self.homography_matrix = cv2.findHomography(
                 self.keyboard_corners, 
                 dst_corners, 
-                cv2.RANSAC
+                cv2.RANSAC,
+                ransacReprojThreshold=0.1
             )[0]
+            
+            # デバッグ情報
+            print(f"🔍 ホモグラフィ計算:")
+            print(f"   入力座標: {self.keyboard_corners}")
+            print(f"   目標座標: {dst_corners}")
+            print(f"   行列: {self.homography_matrix}")
             
             print(f"✅ ホモグラフィ行列を計算しました")
             
@@ -121,11 +128,11 @@ class CoordinateTransformer:
     
     def pixel_to_keyboard_space(self, pixel_x: float, pixel_y: float) -> Optional[Tuple[float, float]]:
         """
-        ピクセル座標をキーボード空間（0,0）〜（1,1）の正規化座標に変換
+        MediaPipeの正規化座標（0-1）をキーボード空間（0,0）〜（1,1）の正規化座標に変換
         
         Args:
-            pixel_x: ピクセルX座標
-            pixel_y: ピクセルY座標
+            pixel_x: MediaPipeの正規化X座標（0-1）
+            pixel_y: MediaPipeの正規化Y座標（0-1）
             
         Returns:
             キーボード空間座標 (x, y) または None（変換失敗時）
@@ -135,14 +142,12 @@ class CoordinateTransformer:
             return None
         
         try:
-            # ピクセル座標を正規化（0-1）
-            # 注意：この実装では画面サイズが必要。実際の使用時は画面サイズを渡す必要がある
-            # 仮の画面サイズとして 1920x1080 を使用
-            screen_width, screen_height = 1920, 1080
+            # MediaPipeの座標は既に0-1正規化されているので、そのまま使用
+            norm_x = pixel_x
+            norm_y = pixel_y
             
-            # ピクセル座標を正規化
-            norm_x = pixel_x / screen_width
-            norm_y = pixel_y / screen_height
+            # デバッグ情報
+            print(f"🔍 座標変換: MediaPipe座標({pixel_x:.3f}, {pixel_y:.3f}) → キーボード空間変換")
             
             # ホモグラフィ変換
             src_point = np.array([[[norm_x, norm_y]]], dtype=np.float32)
@@ -151,11 +156,15 @@ class CoordinateTransformer:
             kb_x = dst_point[0][0][0]
             kb_y = dst_point[0][0][1]
             
+            # デバッグ情報
+            print(f"🔍 ホモグラフィ変換: MediaPipe座標({norm_x:.3f}, {norm_y:.3f}) → キーボード空間({kb_x:.3f}, {kb_y:.3f})")
+            
             # キーボード空間内かチェック
             if 0.0 <= kb_x <= 1.0 and 0.0 <= kb_y <= 1.0:
                 return (kb_x, kb_y)
             else:
-                # キーボード空間外の場合はクリッピング
+                # キーボード空間外の場合は警告とクリッピング
+                print(f"⚠️ キーボード空間外: ({kb_x:.3f}, {kb_y:.3f}) → クリッピング")
                 kb_x = np.clip(kb_x, 0.0, 1.0)
                 kb_y = np.clip(kb_y, 0.0, 1.0)
                 return (kb_x, kb_y)

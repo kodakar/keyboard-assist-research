@@ -149,8 +149,10 @@ class IntentModelTrainer:
             print(f"   総パラメータ数: {total_params:,}")
             print(f"   学習可能パラメータ数: {trainable_params:,}")
             
-            # 損失関数
-            self.criterion = nn.CrossEntropyLoss()
+            # 損失関数（クラス重み対応）
+            class_weights = train_dataset.get_class_weights()
+            self.criterion = nn.CrossEntropyLoss(weight=class_weights.to(self.device))
+            print(f"✅ クラス重みを使用した損失関数を設定しました")
             
             # オプティマイザ
             self.optimizer = optim.Adam(self.model.parameters(), lr=self.learning_rate)
