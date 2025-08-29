@@ -11,3 +11,33 @@ data/
 keyboard_map.json
 git_user_change.txt
 key.txt
+
+# 学習済みモデルと結果ファイル
+models/
+runs/
+*.pth
+*.pt
+*.pkl
+*.h5
+*.onnx
+
+# 学習結果の可視化ファイル
+*.png
+*.jpg
+*.jpeg
+*.pdf
+*.svg
+
+# 学習ログと結果
+training_results.json
+label_map.json
+confusion_matrix.png
+learning_curves.png
+
+# データ収集の一時ファイル
+data/training/*/session_*/sample_*.json
+data/training/*/session_*/session_metadata.json
+
+# ただし、データ構造の例は保持
+!data/training/README.md
+!data/training/.gitkeep

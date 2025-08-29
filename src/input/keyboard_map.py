@@ -73,8 +73,11 @@ class KeyboardMap:
             print(f"エラー: キーマップの保存に失敗しました: {e}")
             return False
     
-    def get_keyboard_corners(self):
-        """キーボードの4隅の座標を返す"""
+    def get_work_area_corners(self):
+        """
+        作業領域（1キー〜-キー〜スペース）の4隅を返す
+        4点クリックで定義された領域
+        """
         if not self.key_positions:
             return None
         
@@ -130,12 +133,11 @@ class KeyboardMap:
         print("以下の4点をクリックしてください")
         print()
         print("クリック順序:")
-        print("  1. 左上: 1キーの左上")
-        print("  2. 右上: ハイフン(-)キーの右上（0の右の記号）")
+        print("  1. 左上: 数字1キーの左上")
+        print("  2. 右上: ハイフン(-)キーの右上")
         print("  3. 右下: スペースキーの右上")
         print("  4. 左下: スペースキーの左上")
-        print()
-        print("※ 文字キー4行は矩形内に、スペースは矩形の下に配置されます")
+        print("※この4点で作業領域を定義します")
         print()
         print("操作:")
         print("  左クリック: 点を配置")

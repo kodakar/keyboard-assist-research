@@ -64,8 +64,11 @@ class KeyboardIntentDataset(Dataset):
         # 訓練/検証の分割
         self.samples = self._split_train_val()
         
-        # 特徴量の次元数
-        self.feature_dim = 15  # 2 + 6 + 3 + 4 = 15次元
+        # 特徴量の次元数（固定）
+        self.feature_dim = 15
+        
+        # 特徴量抽出器のインスタンス化
+        self.feature_extractor = FeatureExtractor(sequence_length=self.sequence_length)
         
         # クラス数
         self.num_classes = len(self.KEY_CHARS)
@@ -84,18 +87,28 @@ class KeyboardIntentDataset(Dataset):
         samples = []
         
         try:
+            print(f"🔍 データディレクトリを探索中: {self.data_dir}")
             # データディレクトリ内の全JSONファイルを探索
             for root, dirs, files in os.walk(self.data_dir):
+                print(f"📁 探索ディレクトリ: {root}")
+                print(f"📁 サブディレクトリ: {dirs}")
+                print(f"📁 ファイル: {files}")
                 for file in files:
+                    print(f"🔍 ファイルチェック: {file} (JSON: {file.endswith('.json')}, sample_含む: {'sample_' in file})")
                     if file.endswith('.json') and 'sample_' in file:
                         file_path = os.path.join(root, file)
+                        print(f"📄 サンプルファイル発見: {file_path}")
                         try:
                             with open(file_path, 'r', encoding='utf-8') as f:
                                 sample_data = json.load(f)
+                                print(f"📄 ファイル読み込み成功: {file_path}")
                                 
                                 # 必要なデータが含まれているかチェック
                                 if self._validate_sample(sample_data):
+                                    print(f"✅ サンプル検証成功: {file_path}")
                                     samples.append(sample_data)
+                                else:
+                                    print(f"❌ サンプル検証失敗: {file_path}")
                                 
                         except Exception as e:
                             warnings.warn(f"ファイル読み込みエラー {file_path}: {e}")
@@ -113,25 +126,36 @@ class KeyboardIntentDataset(Dataset):
         """サンプルデータの妥当性をチェック"""
         required_fields = ['target_char', 'trajectory_data', 'coordinate_system']
         
+        print(f"🔍 サンプル検証開始: {list(sample_data.keys())}")
+        
         # 必須フィールドの存在チェック
         for field in required_fields:
             if field not in sample_data:
+                print(f"❌ 必須フィールド不足: {field}")
                 return False
         
-        # 座標系のチェック
-        if sample_data.get('coordinate_system') != 'relative_keyboard_space':
+        # 座標系のチェック（新しい座標系も受け入れる）
+        coord_sys = sample_data.get('coordinate_system')
+        print(f"🔍 座標系: {coord_sys}")
+        if coord_sys not in ['relative_keyboard_space', 'work_area_v2']:
+            print(f"❌ 座標系不一致: {coord_sys} (期待値: relative_keyboard_space または work_area_v2)")
             return False
         
         # 軌跡データの存在チェック
         trajectory_data = sample_data.get('trajectory_data', [])
+        print(f"🔍 軌跡データ長: {len(trajectory_data)}")
         if not isinstance(trajectory_data, list) or len(trajectory_data) == 0:
+            print(f"❌ 軌跡データ不正: {type(trajectory_data)}, 長さ: {len(trajectory_data) if isinstance(trajectory_data, list) else 'N/A'}")
             return False
         
         # 目標文字の妥当性チェック
         target_char = sample_data.get('target_char', '').lower()
+        print(f"🔍 目標文字: {target_char}")
         if target_char not in self.KEY_CHARS:
+            print(f"❌ 目標文字不正: {target_char}")
             return False
         
+        print(f"✅ サンプル検証成功")
         return True
     
     def _split_train_val(self) -> List[Dict]:
@@ -155,6 +179,7 @@ class KeyboardIntentDataset(Dataset):
             if len(user_samples) < 2:
                 # サンプルが少ない場合は全件を訓練データに
                 train_samples.extend(user_samples)
+                print(f"   📝 ユーザー {user_id}: サンプル数 {len(user_samples)} < 2 のため全件を訓練データに")
             else:
                 # 訓練/検証分割
                 user_train, user_val = train_test_split(
@@ -165,6 +190,20 @@ class KeyboardIntentDataset(Dataset):
                 )
                 train_samples.extend(user_train)
                 val_samples.extend(user_val)
+                print(f"   📝 ユーザー {user_id}: 訓練 {len(user_train)}, 検証 {len(user_val)}")
+        
+        # サンプル数が少ない場合の特別処理
+        if len(train_samples) == 0:
+            print(f"   ⚠️ 警告: 訓練データが0件です")
+            return []
+        
+        if len(val_samples) == 0:
+            print(f"   ⚠️ 警告: 検証データが0件です。訓練データを検証データとしても使用します")
+            # 検証データがない場合は、訓練データの一部を検証データとして使用
+            if len(train_samples) >= 2:
+                val_samples = train_samples[:1]  # 最初の1件を検証データに
+                train_samples = train_samples[1:]  # 残りを訓練データに
+                print(f"   📝 検証データを作成: 訓練 {len(train_samples)}, 検証 {len(val_samples)}")
         
         # 指定されたモードに応じてサンプルを返す
         if self.train:
@@ -189,10 +228,12 @@ class KeyboardIntentDataset(Dataset):
         """
         sample = self.samples[idx]
         
-        # 特徴量を抽出（共通抽出器）
-        if not hasattr(self, '_feature_extractor'):
-            self._feature_extractor = FeatureExtractor(sequence_length=self.sequence_length, fps=30.0)
-        features_np = self._feature_extractor.extract_from_trajectory(sample.get('trajectory_data', []))
+        # 軌跡データから特徴量を抽出
+        trajectory = sample.get('trajectory_data', [])
+        if not self.feature_extractor:
+            self.feature_extractor = FeatureExtractor(sequence_length=self.sequence_length)
+        
+        features_np = self.feature_extractor.extract_from_trajectory(trajectory)
         features = torch.FloatTensor(features_np)
         
         # ラベルを取得
@@ -207,9 +248,9 @@ class KeyboardIntentDataset(Dataset):
     
     def _extract_features(self, sample: Dict) -> torch.FloatTensor:
         """後方互換のため残す（内部でFeatureExtractorを呼ぶ）"""
-        if not hasattr(self, '_feature_extractor'):
-            self._feature_extractor = FeatureExtractor(sequence_length=self.sequence_length, fps=30.0)
-        features_np = self._feature_extractor.extract_from_trajectory(sample.get('trajectory_data', []))
+        if not self.feature_extractor:
+            self.feature_extractor = FeatureExtractor(sequence_length=self.sequence_length)
+        features_np = self.feature_extractor.extract_from_trajectory(sample.get('trajectory_data', []))
         return torch.FloatTensor(features_np)
     
     def _normalize_features(self, features: np.ndarray) -> np.ndarray:

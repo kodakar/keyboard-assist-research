@@ -116,13 +116,13 @@ class TrainingDataCollector:
             self.data_collector = EnhancedDataCollector(user_id=self.user_id)
             self.data_collector.set_screen_size(width, height)
             
-            # キーボードの4隅を設定
-            keyboard_corners = self.keyboard_map.get_keyboard_corners()
-            if keyboard_corners is not None:
-                self.data_collector.set_keyboard_corners(keyboard_corners)
-                print("✅ キーボードの4隅を設定しました")
+            # 作業領域の4隅を設定
+            work_area_corners = self.keyboard_map.get_work_area_corners()
+            if work_area_corners is not None:
+                self.data_collector.set_work_area_corners(work_area_corners)
+                print("✅ 作業領域の4隅を設定しました")
             else:
-                print("⚠️ キーボードの4隅の取得に失敗しました")
+                print("⚠️ 作業領域の4隅の取得に失敗しました")
                 return False
             
             print("✅ データ収集初期化完了")
@@ -268,9 +268,18 @@ class TrainingDataCollector:
         # 軌跡データを取得（前60フレーム）
         trajectory_data = list(self.data_collector.trajectory_buffer)
         
+        # デバッグ情報を追加
+        print(f"   🔍 軌跡データ収集状況:")
+        print(f"      - バッファサイズ: {len(self.data_collector.trajectory_buffer)}")
+        print(f"      - 軌跡データ長: {len(trajectory_data)}")
+        if trajectory_data:
+            print(f"      - 最初のフレーム: {trajectory_data[0].get('frame_index', 'N/A')}")
+            print(f"      - 最後のフレーム: {trajectory_data[-1].get('frame_index', 'N/A')}")
+        
         # サンプルデータを作成
         sample_data = {
             'timestamp': datetime.now().isoformat(),
+            'data_version': '2.0',  # 追加
             'user_id': self.user_id,
             'session_id': os.path.basename(self.session_dir),
             'repetition': self.current_repetition + 1,
@@ -281,7 +290,7 @@ class TrainingDataCollector:
             'target_text': self.session_text,
             'trajectory_data': trajectory_data,
             'trajectory_length': len(trajectory_data),
-            'coordinate_system': 'relative_keyboard_space'
+            'coordinate_system': 'work_area_v2'  # 変更
         }
         
         # サンプルを保存
@@ -331,13 +340,29 @@ class TrainingDataCollector:
             filename = f"sample_{timestamp}_{target_char}_{self.current_char_index:02d}.json"
             filepath = os.path.join(self.session_dir, filename)
             
+            # デバッグ情報を追加
+            print(f"   🔍 保存前チェック:")
+            print(f"      - 軌跡データ長: {len(sample_data.get('trajectory_data', []))}")
+            print(f"      - ファイルパス: {filepath}")
+            
             with open(filepath, 'w', encoding='utf-8') as f:
                 json.dump(sample_data, f, indent=2, ensure_ascii=False)
             
-            print(f"   💾 サンプル保存: {filename}")
+            # 保存後の確認
+            file_size = os.path.getsize(filepath)
+            print(f"   💾 サンプル保存: {filename} (サイズ: {file_size} バイト)")
+            
+            # ファイルの内容を簡単に確認
+            with open(filepath, 'r', encoding='utf-8') as f:
+                content = f.read()
+                if content.endswith('"x":'):
+                    print(f"   ⚠️ 警告: ファイルが不完全です")
+                    print(f"      最後の行: {content[-20:]}")
             
         except Exception as e:
             print(f"   ⚠️ サンプル保存エラー: {e}")
+            import traceback
+            traceback.print_exc()
     
     def _save_session_metadata(self):
         """セッション全体のメタデータを保存"""
@@ -353,7 +378,7 @@ class TrainingDataCollector:
                 'accuracy': (self.correct_inputs / self.total_inputs * 100) if self.total_inputs > 0 else 0,
                 'session_start': self.collection_start_time.isoformat() if self.collection_start_time else None,
                 'session_end': datetime.now().isoformat(),
-                'coordinate_system': 'relative_keyboard_space'
+                'coordinate_system': 'work_area_v2'
             }
             
             metadata_file = os.path.join(self.session_dir, 'session_metadata.json')

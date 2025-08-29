@@ -16,7 +16,7 @@ import pickle
 
 class BasicHandLSTM(nn.Module):
     def __init__(self, 
-                 input_size: int = 63,      # 21点 × 3座標
+                 input_size: int = 15,      # 15次元（作業領域特徴量）
                  hidden_size: int = 64,     # LSTM隠れ層サイズ
                  num_layers: int = 2,       # LSTM層数
                  num_classes: int = 37,     # 37キー（a-z, 0-9, space）
@@ -25,7 +25,7 @@ class BasicHandLSTM(nn.Module):
         基本的な手の動き学習用LSTMモデル
         
         Args:
-            input_size: 入力特徴量の次元数（手のランドマーク）
+            input_size: 入力特徴量の次元数（作業領域特徴量）
             hidden_size: LSTM隠れ層のサイズ
             num_layers: LSTMの層数
             num_classes: 分類クラス数（キーの数）
@@ -409,7 +409,7 @@ class HandLSTMTrainer:
 def create_sample_model() -> BasicHandLSTM:
     """サンプルモデルを作成"""
     model = BasicHandLSTM(
-        input_size=63,      # 21点 × 3座標
+        input_size=15,      # 15次元（作業領域特徴量）
         hidden_size=64,     # LSTM隠れ層サイズ
         num_layers=2,       # LSTM層数
         num_classes=37,     # 37キー

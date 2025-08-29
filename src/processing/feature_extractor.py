@@ -31,8 +31,9 @@ class FeatureExtractor:
         idx_x = []
         idx_y = []
         for i in range(min(self.sequence_length, len(trajectory_data))):
-            kb = trajectory_data[i].get('keyboard_space_coords', {})
-            index_finger = kb.get('index_finger', {})
+            # 後方互換性のため両方のキー名をチェック
+            coords = trajectory_data[i].get('work_area_coords') or trajectory_data[i].get('keyboard_space_coords', {})
+            index_finger = coords.get('index_finger', {})
             idx_x.append(float(index_finger.get('x', 0.0)))
             idx_y.append(float(index_finger.get('y', 0.0)))
 
@@ -54,27 +55,41 @@ class FeatureExtractor:
         for i in range(min(self.sequence_length, len(trajectory_data))):
             frame = trajectory_data[i]
 
-            # 2: 指の座標
-            finger_x = idx_x[i] if i < len(idx_x) else 0.0
-            finger_y = idx_y[i] if i < len(idx_y) else 0.0
+            # 2: 指の座標（エラーハンドリング付き）
+            try:
+                finger_x = idx_x[i] if i < len(idx_x) else 0.0
+                finger_y = idx_y[i] if i < len(idx_y) else 0.0
+            except (IndexError, TypeError):
+                finger_x, finger_y = 0.0, 0.0
 
-            # 6: 最近傍3キーへの相対座標
+            # 6: 最近傍3キーへの相対座標（エラーハンドリング付き）
             nearest_keys = frame.get('nearest_keys_relative', [])
             rel = np.zeros(6, dtype=np.float32)
-            for j, key_info in enumerate(nearest_keys[:3]):
-                rel[j*2] = float(key_info.get('relative_x', 0.0))
-                rel[j*2+1] = float(key_info.get('relative_y', 0.0))
+            try:
+                for j, key_info in enumerate(nearest_keys[:3]):
+                    if isinstance(key_info, dict):
+                        rel[j*2] = float(key_info.get('relative_x', 0.0))
+                        rel[j*2+1] = float(key_info.get('relative_y', 0.0))
+            except (TypeError, ValueError, KeyError):
+                rel = np.zeros(6, dtype=np.float32)
 
-            # 3: 最近傍3キーへの距離
+            # 3: 最近傍3キーへの距離（エラーハンドリング付き）
             dists = np.zeros(3, dtype=np.float32)
-            for j, key_info in enumerate(nearest_keys[:3]):
-                dists[j] = float(key_info.get('distance', 0.0))
+            try:
+                for j, key_info in enumerate(nearest_keys[:3]):
+                    if isinstance(key_info, dict):
+                        dists[j] = float(key_info.get('distance', 0.0))
+            except (TypeError, ValueError, KeyError):
+                dists = np.zeros(3, dtype=np.float32)
 
-            # 4: 速度(x,y), 加速度(x,y)
-            vxa = vel_x[i]
-            vya = vel_y[i]
-            axa = acc_x[i]
-            aya = acc_y[i]
+            # 4: 速度(x,y), 加速度(x,y)（エラーハンドリング付き）
+            try:
+                vxa = vel_x[i] if i < len(vel_x) else 0.0
+                vya = vel_y[i] if i < len(vel_y) else 0.0
+                axa = acc_x[i] if i < len(acc_x) else 0.0
+                aya = acc_y[i] if i < len(acc_y) else 0.0
+            except (IndexError, TypeError):
+                vxa, vya, axa, aya = 0.0, 0.0, 0.0, 0.0
 
             features[i] = np.concatenate([
                 np.array([finger_x, finger_y], dtype=np.float32),
@@ -88,6 +103,10 @@ class FeatureExtractor:
         features[:, 2:8] = np.clip(features[:, 2:8], -5.0, 5.0)
         features[:, 8:11] = np.clip(features[:, 8:11], 0.0, 10.0)
         features[:, 11:] = np.clip(features[:, 11:], -5.0, 5.0)
+
+        # 出力形状の保証
+        assert features.shape == (self.sequence_length, self.feature_dim), \
+            f"特徴量の形状が不正: {features.shape}, 期待: ({self.sequence_length}, {self.feature_dim})"
 
         return features
 

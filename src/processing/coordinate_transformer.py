@@ -1,7 +1,8 @@
 # src/processing/coordinate_transformer.py
 """
 座標変換クラス
-カメラのピクセル座標をキーボード基準の相対座標に変換する機能を提供
+カメラのピクセル座標を作業領域基準の相対座標に変換する機能を提供
+作業領域：1キー左上〜-キー右上〜スペースで定義される矩形
 """
 
 import json
@@ -24,10 +25,10 @@ class KeyInfo:
     relative_y: float  # 指定キーからの相対Y座標 (キーサイズ単位)
 
 
-class CoordinateTransformer:
+class WorkAreaTransformer:
     """
     座標変換クラス
-    カメラのピクセル座標をキーボード基準の相対座標に変換
+    カメラのピクセル座標を作業領域基準の相対座標に変換
     """
     
     def __init__(self, keyboard_map_path: str = 'keyboard_map.json'):
@@ -40,13 +41,14 @@ class CoordinateTransformer:
         self.keyboard_map_path = keyboard_map_path
         self.keyboard_map = None
         self.homography_matrix = None
-        self.keyboard_corners = None
+        self.work_area_corners = None
+        self.feature_dim = 15  # 15次元特徴量
         
         # キーボードマップを読み込み
         self._load_keyboard_map()
         
-        # キーボードの4隅の座標を設定（デフォルト値）
-        self._set_default_keyboard_corners()
+        # 作業領域の4隅の座標を設定（デフォルト値）
+        self._set_default_work_area_corners()
     
     def _load_keyboard_map(self):
         """キーボードマップを読み込み"""
@@ -62,43 +64,43 @@ class CoordinateTransformer:
             print(f"⚠️ キーボードマップ読み込みエラー: {e}")
             self.keyboard_map = {}
     
-    def _set_default_keyboard_corners(self):
-        """キーボードの4隅の座標をデフォルト値で設定"""
-        # デフォルトでは画面の中央付近にキーボードがあると仮定
-        # 実際の使用時は set_keyboard_corners で更新される
-        self.keyboard_corners = np.array([
+    def _set_default_work_area_corners(self):
+        """作業領域の4隅の座標をデフォルト値で設定"""
+        # デフォルトでは画面の中央付近に作業領域があると仮定
+        # 実際の使用時は set_work_area_corners で更新される
+        self.work_area_corners = np.array([
             [0.2, 0.3],  # 左上
             [0.8, 0.3],  # 右上
             [0.8, 0.7],  # 右下
             [0.2, 0.7]   # 左下
         ], dtype=np.float32)
     
-    def set_keyboard_corners(self, corners: np.ndarray):
+    def set_work_area_corners(self, corners: np.ndarray):
         """
-        キーボードの4隅の座標を設定
+        作業領域の4隅の座標を設定
         
         Args:
             corners: 4隅の座標 (左上, 右上, 右下, 左下) の配列
                     各座標は (x, y) の形式で、0-1の正規化座標
         """
         if corners.shape != (4, 2):
-            raise ValueError("キーボードの4隅の座標は4x2の配列である必要があります")
+            raise ValueError("作業領域の4隅の座標は4x2の配列である必要があります")
         
-        self.keyboard_corners = corners.astype(np.float32)
+        self.work_area_corners = corners.astype(np.float32)
         
         # ホモグラフィ行列を再計算
         self._compute_homography()
         
-        print(f"✅ キーボードの4隅を設定しました")
-        print(f"   左上: ({corners[0][0]:.3f}, {corners[0][1]:.3f})")
-        print(f"   右上: ({corners[1][0]:.3f}, {corners[1][1]:.3f})")
-        print(f"   右下: ({corners[2][0]:.3f}, {corners[2][1]:.3f})")
-        print(f"   左下: ({corners[3][0]:.3f}, {corners[3][1]:.3f})")
+        # print(f"✅ 作業領域の4隅を設定しました")
+        # print(f"   左上: ({corners[0][0]:.3f}, {corners[0][1]:.3f})")
+        # print(f"   右上: ({corners[1][0]:.3f}, {corners[1][1]:.3f})")
+        # print(f"   右下: ({corners[2][0]:.3f}, {corners[2][1]:.3f})")
+        # print(f"   左下: ({corners[3][0]:.3f}, {corners[3][1]:.3f})")
     
     def _compute_homography(self):
         """4隅の座標からホモグラフィ行列を計算"""
         try:
-            # キーボード空間の4隅（0-1正規化）
+            # 作業領域の4隅（0-1正規化）
             dst_corners = np.array([
                 [0.0, 0.0],  # 左上
                 [1.0, 0.0],  # 右上
@@ -108,34 +110,35 @@ class CoordinateTransformer:
             
             # ホモグラフィ行列を計算
             self.homography_matrix = cv2.findHomography(
-                self.keyboard_corners, 
+                self.work_area_corners, 
                 dst_corners, 
                 cv2.RANSAC,
                 ransacReprojThreshold=0.1
             )[0]
             
-            # デバッグ情報
-            print(f"🔍 ホモグラフィ計算:")
-            print(f"   入力座標: {self.keyboard_corners}")
-            print(f"   目標座標: {dst_corners}")
-            print(f"   行列: {self.homography_matrix}")
+            # デバッグ情報（コメントアウト）
+            # print(f"🔍 ホモグラフィ計算:")
+            # print(f"   入力座標: {self.work_area_corners}")
+            # print(f"   目標座標: {dst_corners}")
+            # print(f"   行列: {self.homography_matrix}")
             
-            print(f"✅ ホモグラフィ行列を計算しました")
+            # print(f"✅ ホモグラフィ行列を計算しました")
             
         except Exception as e:
             print(f"⚠️ ホモグラフィ行列計算エラー: {e}")
             self.homography_matrix = None
     
-    def pixel_to_keyboard_space(self, pixel_x: float, pixel_y: float) -> Optional[Tuple[float, float]]:
+    def pixel_to_work_area(self, mp_x: float, mp_y: float) -> Optional[Tuple[float, float]]:
         """
-        MediaPipeの正規化座標（0-1）をキーボード空間（0,0）〜（1,1）の正規化座標に変換
+        MediaPipe正規化座標を作業領域座標に変換
+        作業領域：1キー左上(0,0)〜-キー右上(1,0)〜スペース(y=1)の矩形
         
         Args:
-            pixel_x: MediaPipeの正規化X座標（0-1）
-            pixel_y: MediaPipeの正規化Y座標（0-1）
+            mp_x: MediaPipeの正規化X座標（0-1）
+            mp_y: MediaPipeの正規化Y座標（0-1）
             
         Returns:
-            キーボード空間座標 (x, y) または None（変換失敗時）
+            作業領域座標 (x, y) または None（変換失敗時）
         """
         if self.homography_matrix is None:
             print("⚠️ ホモグラフィ行列が計算されていません")
@@ -143,43 +146,43 @@ class CoordinateTransformer:
         
         try:
             # MediaPipeの座標は既に0-1正規化されているので、そのまま使用
-            norm_x = pixel_x
-            norm_y = pixel_y
+            norm_x = mp_x
+            norm_y = mp_y
             
-            # デバッグ情報
-            print(f"🔍 座標変換: MediaPipe座標({pixel_x:.3f}, {pixel_y:.3f}) → キーボード空間変換")
+            # デバッグ情報（コメントアウト）
+            # print(f"🔍 座標変換: MediaPipe座標({mp_x:.3f}, {mp_y:.3f}) → 作業領域変換")
             
             # ホモグラフィ変換
             src_point = np.array([[[norm_x, norm_y]]], dtype=np.float32)
             dst_point = cv2.perspectiveTransform(src_point, self.homography_matrix)
             
-            kb_x = dst_point[0][0][0]
-            kb_y = dst_point[0][0][1]
+            wa_x = dst_point[0][0][0]
+            wa_y = dst_point[0][0][1]
             
-            # デバッグ情報
-            print(f"🔍 ホモグラフィ変換: MediaPipe座標({norm_x:.3f}, {norm_y:.3f}) → キーボード空間({kb_x:.3f}, {kb_y:.3f})")
+            # デバッグ情報（コメントアウト）
+            # print(f"🔍 ホモグラフィ変換: MediaPipe座標({norm_x:.3f}, {norm_y:.3f}) → 作業領域({wa_x:.3f}, {wa_y:.3f})")
             
-            # キーボード空間内かチェック
-            if 0.0 <= kb_x <= 1.0 and 0.0 <= kb_y <= 1.0:
-                return (kb_x, kb_y)
+            # 作業領域内かチェック
+            if 0.0 <= wa_x <= 1.0 and 0.0 <= wa_y <= 1.0:
+                return (wa_x, wa_y)
             else:
-                # キーボード空間外の場合は警告とクリッピング
-                print(f"⚠️ キーボード空間外: ({kb_x:.3f}, {kb_y:.3f}) → クリッピング")
-                kb_x = np.clip(kb_x, 0.0, 1.0)
-                kb_y = np.clip(kb_y, 0.0, 1.0)
-                return (kb_x, kb_y)
+                # 作業領域外の場合は警告とクリッピング
+                # print(f"⚠️ 作業領域外: ({wa_x:.3f}, {wa_y:.3f}) → クリッピング")
+                wa_x = np.clip(wa_x, 0.0, 1.0)
+                wa_y = np.clip(wa_y, 0.0, 1.0)
+                return (wa_x, wa_y)
                 
         except Exception as e:
             print(f"⚠️ 座標変換エラー: {e}")
             return None
     
-    def keyboard_to_key_relative(self, kb_x: float, kb_y: float, target_key: str) -> Optional[Tuple[float, float]]:
+    def work_area_to_key_relative(self, wa_x: float, wa_y: float, target_key: str) -> Optional[Tuple[float, float]]:
         """
-        キーボード空間の座標を、特定キーからの相対座標に変換（キーサイズ単位で表現）
+        作業領域の座標を、特定キーからの相対座標に変換（キーサイズ単位で表現）
         
         Args:
-            kb_x: キーボード空間X座標 (0-1)
-            kb_y: キーボード空間Y座標 (0-1)
+            wa_x: 作業領域X座標 (0-1)
+            wa_y: 作業領域Y座標 (0-1)
             target_key: 基準となるキー
             
         Returns:
@@ -197,8 +200,8 @@ class CoordinateTransformer:
             target_height = target_info.get('height', 0.05)  # デフォルト値
             
             # 相対座標を計算（キーサイズ単位）
-            relative_x = (kb_x - target_center_x) / target_width
-            relative_y = (kb_y - target_center_y) / target_height
+            relative_x = (wa_x - target_center_x) / target_width
+            relative_y = (wa_y - target_center_y) / target_height
             
             return (relative_x, relative_y)
             
@@ -206,13 +209,13 @@ class CoordinateTransformer:
             print(f"⚠️ 相対座標計算エラー: {e}")
             return None
     
-    def get_nearest_keys_with_relative_coords(self, kb_x: float, kb_y: float, top_k: int = 3) -> List[KeyInfo]:
+    def get_nearest_keys_with_relative_coords(self, wa_x: float, wa_y: float, top_k: int = 3) -> List[KeyInfo]:
         """
         最も近いk個のキーとその相対座標を返す
         
         Args:
-            kb_x: キーボード空間X座標 (0-1)
-            kb_y: キーボード空間Y座標 (0-1)
+            wa_x: 作業領域X座標 (0-1)
+            wa_y: 作業領域Y座標 (0-1)
             top_k: 取得するキーの数
             
         Returns:
@@ -231,11 +234,11 @@ class CoordinateTransformer:
                 key_height = key_info.get('height', 0.05)
                 
                 # ユークリッド距離を計算
-                distance = np.sqrt((kb_x - key_center_x)**2 + (kb_y - key_center_y)**2)
+                distance = np.sqrt((wa_x - key_center_x)**2 + (wa_y - key_center_y)**2)
                 
                 # 相対座標を計算
-                relative_x = (kb_x - key_center_x) / key_width
-                relative_y = (kb_y - key_center_y) / key_height
+                relative_x = (wa_x - key_center_x) / key_width
+                relative_y = (wa_y - key_center_y) / key_height
                 
                 key_info_obj = KeyInfo(
                     key=key,
@@ -271,32 +274,32 @@ class CoordinateTransformer:
         self.screen_height = height
         print(f"✅ 画面サイズを設定しました: {width}x{height}")
     
-    def get_keyboard_bounds(self) -> Optional[Tuple[float, float, float, float]]:
+    def get_work_area_bounds(self) -> Optional[Tuple[float, float, float, float]]:
         """
-        キーボードの境界を取得
+        作業領域の境界を取得
         
         Returns:
             (min_x, min_y, max_x, max_y) または None
         """
-        if self.keyboard_corners is None:
+        if self.work_area_corners is None:
             return None
         
-        min_x = np.min(self.keyboard_corners[:, 0])
-        min_y = np.min(self.keyboard_corners[:, 1])
-        max_x = np.max(self.keyboard_corners[:, 0])
-        max_y = np.max(self.keyboard_corners[:, 1])
+        min_x = np.min(self.work_area_corners[:, 0])
+        min_y = np.min(self.work_area_corners[:, 1])
+        max_x = np.max(self.work_area_corners[:, 0])
+        max_y = np.max(self.work_area_corners[:, 1])
         
         return (min_x, min_y, max_x, max_y)
     
-    def is_point_in_keyboard_space(self, kb_x: float, kb_y: float) -> bool:
+    def is_point_in_work_area(self, wa_x: float, wa_y: float) -> bool:
         """
-        点がキーボード空間内にあるかチェック
+        点が作業領域内にあるかチェック
         
         Args:
-            kb_x: キーボード空間X座標
-            kb_y: キーボード空間Y座標
+            wa_x: 作業領域X座標
+            wa_y: 作業領域Y座標
             
         Returns:
-            キーボード空間内の場合True
+            作業領域内の場合True
         """
-        return 0.0 <= kb_x <= 1.0 and 0.0 <= kb_y <= 1.0
+        return 0.0 <= wa_x <= 1.0 and 0.0 <= wa_y <= 1.0

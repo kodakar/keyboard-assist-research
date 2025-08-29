@@ -11,7 +11,7 @@ from datetime import datetime
 from collections import deque
 import cv2
 from typing import List, Dict, Optional, Tuple
-from src.processing.coordinate_transformer import CoordinateTransformer
+from src.processing.coordinate_transformer import WorkAreaTransformer
 
 class EnhancedDataCollector:
     def __init__(self, 
@@ -31,11 +31,11 @@ class EnhancedDataCollector:
         self.user_id = user_id
         
         # 座標変換クラスの初期化
-        self.coordinate_transformer = CoordinateTransformer()
+        self.transformer = WorkAreaTransformer()
         
         # 手の軌跡をバッファ（時系列データ）
         self.trajectory_buffer = deque(maxlen=trajectory_buffer_size)
-        
+    
         # 前フレームの座標（速度計算用）
         self.previous_coords = None
         
@@ -48,12 +48,12 @@ class EnhancedDataCollector:
         self.collection_start_time = None
         
         # データディレクトリの作成
-        os.makedirs(data_dir, exist_ok=True)
-        os.makedirs(os.path.join(data_dir, "trajectories"), exist_ok=True)
-        os.makedirs(os.path.join(data_dir, "samples"), exist_ok=True)
+        os.makedirs(self.data_dir, exist_ok=True)
+        os.makedirs(os.path.join(self.data_dir, "trajectories"), exist_ok=True)
+        os.makedirs(os.path.join(self.data_dir, "samples"), exist_ok=True)
         
         # モデル保存用ディレクトリの作成
-        models_dir = os.path.join(data_dir, "models")
+        models_dir = os.path.join(self.data_dir, "models")
         os.makedirs(models_dir, exist_ok=True)
         os.makedirs(os.path.join(models_dir, "user_001"), exist_ok=True)
         os.makedirs(os.path.join(models_dir, "shared"), exist_ok=True)
@@ -64,6 +64,15 @@ class EnhancedDataCollector:
             "total_trajectories": 0,
             "session_start": datetime.now().isoformat()
         }
+    
+    def set_work_area_corners(self, corners: np.ndarray):
+        """
+        作業領域の4隅の座標を設定
+        
+        Args:
+            corners: 4隅の座標 (左上, 右上, 右下, 左下) の配列
+        """
+        self.transformer.set_work_area_corners(corners)
     
     def start_collection_session(self, target_text: str = ""):
         """
@@ -112,28 +121,28 @@ class EnhancedDataCollector:
             middle_finger = hand_landmarks.landmark[12]  # 中指の先端
             wrist = hand_landmarks.landmark[0]  # 手首
             
-            # キーボード空間座標に変換
-            kb_coords = {}
+            # 作業領域座標に変換
+            wa_coords = {}
             for name, landmark in [("index_finger", index_finger), 
                                   ("middle_finger", middle_finger), 
                                   ("wrist", wrist)]:
-                # ピクセル座標をキーボード空間座標に変換
-                kb_coord = self.coordinate_transformer.pixel_to_keyboard_space(
+                # ピクセル座標を作業領域座標に変換
+                wa_coord = self.transformer.pixel_to_work_area(
                     landmark.x, landmark.y
                 )
-                if kb_coord:
-                    kb_coords[name] = {"x": kb_coord[0], "y": kb_coord[1]}
+                if wa_coord:
+                    wa_coords[name] = {"x": float(wa_coord[0]), "y": float(wa_coord[1])}
                 else:
                     # 変換失敗時は元の座標を使用
-                    kb_coords[name] = {"x": landmark.x, "y": landmark.y}
+                    wa_coords[name] = {"x": float(landmark.x), "y": float(landmark.y)}
             
             # 人差し指の位置から最近傍キーと相対座標を取得
             nearest_keys_info = []
-            if "index_finger" in kb_coords:
-                index_x = kb_coords["index_finger"]["x"]
-                index_y = kb_coords["index_finger"]["y"]
+            if "index_finger" in wa_coords:
+                index_x = wa_coords["index_finger"]["x"]
+                index_y = wa_coords["index_finger"]["y"]
                 
-                nearest_keys = self.coordinate_transformer.get_nearest_keys_with_relative_coords(
+                nearest_keys = self.transformer.get_nearest_keys_with_relative_coords(
                     index_x, index_y, top_k=3
                 )
                 
@@ -145,24 +154,25 @@ class EnhancedDataCollector:
                     
                     nearest_keys_info.append({
                         "key": key_info.key,
-                        "relative_x": key_info.relative_x,
-                        "relative_y": key_info.relative_y,
-                        "distance": np.sqrt(key_info.relative_x**2 + key_info.relative_y**2),
-                        "approach_velocity": approach_velocity
+                        "relative_x": float(key_info.relative_x),
+                        "relative_y": float(key_info.relative_y),
+                        "distance": float(np.sqrt(key_info.relative_x**2 + key_info.relative_y**2)),
+                        "approach_velocity": float(approach_velocity) if approach_velocity is not None else 0.0
                     })
             
             # 軌跡データを作成
             trajectory_point = {
-                "timestamp": frame_timestamp or datetime.now().timestamp(),
+                "timestamp": float(frame_timestamp or datetime.now().timestamp()),
                 "frame_index": len(self.trajectory_buffer),
-                "keyboard_space_coords": kb_coords,
-                "nearest_keys_relative": nearest_keys_info
+                "work_area_coords": wa_coords,  # 名前変更
+                "nearest_keys_relative": nearest_keys_info,
+                "data_version": "2.0"  # バージョン追加
             }
             
             # 前フレームの座標を更新（速度計算用）
             self.previous_coords = {
-                "index_finger": (index_finger.x, index_finger.y),
-                "timestamp": frame_timestamp or datetime.now().timestamp()
+                "index_finger": (float(index_finger.x), float(index_finger.y)),
+                "timestamp": float(frame_timestamp or datetime.now().timestamp())
             }
             
             # 軌跡データをバッファに追加
@@ -209,8 +219,8 @@ class EnhancedDataCollector:
             if time_diff <= 0:
                 return 0.0
             
-            # 前フレームの座標をキーボード空間に変換
-            prev_kb_coord = self.coordinate_transformer.pixel_to_keyboard_space(prev_x, prev_y)
+            # 前フレームの座標を作業領域に変換
+            prev_kb_coord = self.transformer.pixel_to_work_area(prev_x, prev_y)
             if prev_kb_coord is None:
                 return 0.0
             
@@ -267,7 +277,7 @@ class EnhancedDataCollector:
             'trajectory_data': trajectory_data,
             'trajectory_length': len(self.trajectory_buffer),
             'session_duration': (datetime.now() - self.collection_start_time).total_seconds(),
-            'coordinate_system': 'relative_keyboard_space'  # 座標系の指定
+            'coordinate_system': 'work_area_v2'  # 座標系の指定
         }
         
         # サンプルを保存
@@ -293,19 +303,19 @@ class EnhancedDataCollector:
             width: 画面幅（ピクセル）
             height: 画面高さ（ピクセル）
         """
-        self.coordinate_transformer.set_screen_size(width, height)
+        self.transformer.set_screen_size(width, height)
         print(f"✅ 画面サイズを設定しました: {width}x{height}")
     
-    def set_keyboard_corners(self, corners: np.ndarray):
+    def set_work_area_corners(self, corners: np.ndarray):
         """
-        キーボードの4隅の座標を設定
+        作業領域の4隅の座標を設定
         
         Args:
             corners: 4隅の座標 (左上, 右上, 右下, 左下) の配列
                     各座標は (x, y) の形式で、0-1の正規化座標
         """
-        self.coordinate_transformer.set_keyboard_corners(corners)
-        print(f"✅ キーボードの4隅を設定しました")
+        self.transformer.set_work_area_corners(corners)
+        print(f"✅ 作業領域の4隅を設定しました")
     
     def _landmarks_to_array(self, hand_landmarks) -> List[float]:
         """手のランドマークを配列に変換"""
