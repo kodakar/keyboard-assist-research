@@ -15,14 +15,14 @@ from src.processing.coordinate_transformer import WorkAreaTransformer
 
 class EnhancedDataCollector:
     def __init__(self, 
-                 trajectory_buffer_size: int = 30,
+                 trajectory_buffer_size: int = 60,
                  data_dir: str = "data",
                  user_id: str = "user_001"):
         """
         拡張データ収集システムの初期化
         
         Args:
-            trajectory_buffer_size: 軌跡バッファのサイズ（フレーム数）
+            trajectory_buffer_size: 軌跡バッファのサイズ（フレーム数、学習時のsequence_lengthと一致させる）
             data_dir: データ保存ディレクトリ
             user_id: ユーザーID
         """
