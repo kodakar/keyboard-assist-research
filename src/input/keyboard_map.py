@@ -127,7 +127,7 @@ class KeyboardMap:
     
     def setup_four_point_calibration(self):
         """4点クリックによる簡易キャリブレーション"""
-    def setup_four_point_calibration(self):
+    def setup_four_point_calibration(self, existing_camera=None):
         """4点クリックによる簡易キャリブレーション"""
         print("=== 4点クリック キャリブレーション ===")
         print("以下の4点をクリックしてください")
@@ -145,10 +145,16 @@ class KeyboardMap:
         print("  SPACE: 確定")
         print("  ESC: キャンセル")
         
-        camera = cv2.VideoCapture(0)
-        if not camera.isOpened():
-            print("エラー: カメラを開けませんでした")
-            return False
+        # 既存のカメラインスタンスがある場合は使用、なければ新規作成
+        if existing_camera is not None:
+            camera = existing_camera
+            print("✓ 既存のカメラインスタンスを使用します")
+        else:
+            camera = cv2.VideoCapture(0)
+            if not camera.isOpened():
+                print("エラー: カメラを開けませんでした")
+                return False
+            print("✓ 新しいカメラインスタンスを作成しました")
         
         cv2.namedWindow('4-Point Calibration')
         
@@ -170,9 +176,15 @@ class KeyboardMap:
         
         try:
             while True:
-                ret, frame = camera.read()
-                if not ret:
-                    break
+                # Cameraクラスの場合はread_frame()を使用、cv2.VideoCaptureの場合はread()を使用
+                if hasattr(camera, 'read_frame'):
+                    frame = camera.read_frame()
+                    if frame is None:
+                        break
+                else:
+                    ret, frame = camera.read()
+                    if not ret:
+                        break
                 
                 param['frame_shape'] = frame.shape[:2]
                 
@@ -225,7 +237,9 @@ class KeyboardMap:
                             self.key_positions = key_positions
                             self.save_map()
                             print("✓ キャリブレーション完了！")
-                            camera.release()
+                            # Cameraクラスの場合はrelease()を呼び出さない（既存のインスタンスなので）
+                            if not hasattr(camera, 'read_frame'):
+                                camera.release()
                             cv2.destroyAllWindows()  # 全ウィンドウを閉じる
                             return True
                     else:
@@ -241,19 +255,21 @@ class KeyboardMap:
                     break
         
         finally:
-            camera.release()
+            # Cameraクラスの場合はrelease()を呼び出さない（既存のインスタンスなので）
+            if not hasattr(camera, 'read_frame'):
+                camera.release()
             cv2.destroyAllWindows()  # 全ウィンドウを閉じる
         
         return False
     
-    def start_calibration(self):
+    def start_calibration(self, existing_camera=None):
         """キャリブレーション開始（4点クリックをデフォルトに）"""
         print("キーボードキャリブレーションを開始します")
         print(f"対象キー: {len(self.target_keys)}個")
         print()
         
         # 4点クリック方式をデフォルトに
-        return self.setup_four_point_calibration()
+        return self.setup_four_point_calibration(existing_camera)
     
     def get_nearest_key(self, x, y):
         """指定された座標に最も近いキーを返す（改良版）"""
