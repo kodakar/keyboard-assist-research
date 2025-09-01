@@ -100,11 +100,54 @@ class TrainingDataCollector:
             
             # キーボードマップの初期化
             self.keyboard_map = KeyboardMap()
-            if not self.keyboard_map.key_positions:
-                print("⚠️ キーボードマッピングが存在しません")
-                print("   マッピングを開始します...")
-                if not self.keyboard_map.start_calibration():
+            
+            # keyboard_map.jsonファイルの存在確認
+            keyboard_map_file = "keyboard_map.json"
+            if os.path.exists(keyboard_map_file):
+                print("\n📁 保存済みのキーボード設定ファイル (keyboard_map.json) が見つかりました。")
+                print("\n1: 保存した設定を再利用する")
+                print("2: 新しくキャリブレーションをやり直す")
+                
+                while True:
+                    try:
+                        choice = input("\nどちらにしますか？ (1/2): ").strip()
+                        
+                        if choice == "1":
+                            print("✅ 保存した設定を再利用します。")
+                            # KeyboardMapのコンストラクタが自動で読み込んでいるため、追加処理は不要
+                            break
+                        elif choice == "2":
+                            print("🔄 新しいキャリブレーションを開始します...")
+                            if not self.keyboard_map.start_calibration(self.camera):
+                                print("❌ キーボードマッピングに失敗しました")
+                                return False
+                            
+                            # キャリブレーション完了後のカメラ状態確認・復旧
+                            print("🔄 キャリブレーション完了後のカメラ状態を確認中...")
+                            if not self._verify_camera_after_calibration():
+                                print("❌ キャリブレーション後のカメラ状態確認に失敗しました")
+                                return False
+                            break
+                        else:
+                            print("❌ 無効な選択です。1 または 2 を入力してください。")
+                            
+                    except KeyboardInterrupt:
+                        print("\n❌ 無効な選択です。プログラムを終了します。")
+                        return False
+                    except EOFError:
+                        print("\n❌ 無効な選択です。プログラムを終了します。")
+                        return False
+            else:
+                print("⚠️ キーボード設定ファイルが見つかりません。")
+                print("   新しいキャリブレーションを開始します...")
+                if not self.keyboard_map.start_calibration(self.camera):
                     print("❌ キーボードマッピングに失敗しました")
+                    return False
+                
+                # キャリブレーション完了後のカメラ状態確認・復旧
+                print("🔄 キャリブレーション完了後のカメラ状態を確認中...")
+                if not self._verify_camera_after_calibration():
+                    print("❌ キャリブレーション後のカメラ状態確認に失敗しました")
                     return False
             
             # キーボードトラッカーの初期化
@@ -131,6 +174,108 @@ class TrainingDataCollector:
             
         except Exception as e:
             print(f"❌ コンポーネント初期化エラー: {e}")
+            return False
+    
+    def _verify_camera_after_calibration(self) -> bool:
+        """キャリブレーション完了後のカメラ状態を確認・復旧"""
+        try:
+            print("   カメラの状態を確認中...")
+            
+            # より長い待機時間でカメラが安定するのを待つ
+            print("   ⏳ カメラの安定化を待機中...")
+            time.sleep(3)
+            
+            # カメラが開いているか確認
+            if not self.camera.is_opened():
+                print("   ⚠️ カメラが閉じられています。再初期化します...")
+                self.camera = Camera()
+                if not self.camera.is_opened():
+                    print("   ❌ カメラの再初期化に失敗しました")
+                    return False
+            
+            # フレーム取得テスト（より多くの試行）
+            print("   📷 フレーム取得テスト中...")
+            for attempt in range(5):  # 最大5回試行
+                frame = self.camera.read_frame()
+                if frame is not None:
+                    height, width = frame.shape[:2]
+                    print(f"   ✅ カメラ状態確認完了: {width}x{height}")
+                    
+                    # 追加の安定性テスト
+                    print("   🔍 追加の安定性テスト中...")
+                    stable_frames = 0
+                    for stability_test in range(3):
+                        test_frame = self.camera.read_frame()
+                        if test_frame is not None:
+                            stable_frames += 1
+                        time.sleep(0.2)
+                    
+                    if stable_frames >= 2:  # 3回中2回以上成功
+                        print(f"   ✅ カメラの安定性確認完了 ({stable_frames}/3)")
+                        return True
+                    else:
+                        print(f"   ⚠️ カメラの安定性が不十分 ({stable_frames}/3)")
+                        continue
+                else:
+                    print(f"   ⚠️ フレーム取得失敗 (試行 {attempt + 1}/5)")
+                    time.sleep(1)  # より長い待機時間
+            
+            print("   ❌ フレーム取得に失敗しました")
+            return False
+            
+        except Exception as e:
+            print(f"   ❌ カメラ状態確認エラー: {e}")
+            return False
+    
+    def _verify_camera_before_collection(self) -> bool:
+        """データ収集開始前のカメラ状態を確認"""
+        try:
+            print("      🔧 カメラの状態を詳細確認中...")
+            
+            # カメラが開いているか確認
+            if not self.camera.is_opened():
+                print("      ⚠️ カメラが閉じられています。再初期化します...")
+                self.camera = Camera()
+                if not self.camera.is_opened():
+                    print("      ❌ カメラの再初期化に失敗しました")
+                    return False
+            
+            # より長い待機時間でカメラの安定化を待つ
+            print("      ⏳ カメラの安定化を待機中...")
+            time.sleep(2)
+            
+            # フレーム取得テスト（より多くの試行）
+            print("      📷 フレーム取得テスト中...")
+            for attempt in range(5):  # 最大5回試行
+                frame = self.camera.read_frame()
+                if frame is not None:
+                    height, width = frame.shape[:2]
+                    print(f"      ✅ カメラ状態確認完了: {width}x{height}")
+                    
+                    # 追加の安定性テスト
+                    print("      🔍 追加の安定性テスト中...")
+                    stable_frames = 0
+                    for stability_test in range(3):
+                        test_frame = self.camera.read_frame()
+                        if test_frame is not None:
+                            stable_frames += 1
+                        time.sleep(0.1)
+                    
+                    if stable_frames >= 2:  # 3回中2回以上成功
+                        print(f"      ✅ カメラの安定性確認完了 ({stable_frames}/3)")
+                        return True
+                    else:
+                        print(f"      ⚠️ カメラの安定性が不十分 ({stable_frames}/3)")
+                        continue
+                else:
+                    print(f"      ⚠️ フレーム取得失敗 (試行 {attempt + 1}/5)")
+                    time.sleep(1)  # より長い待機時間
+            
+            print("      ❌ フレーム取得に失敗しました")
+            return False
+            
+        except Exception as e:
+            print(f"      ❌ カメラ状態確認エラー: {e}")
             return False
     
     def run_data_collection(self) -> bool:
@@ -171,6 +316,12 @@ class TrainingDataCollector:
         print(f"\n📝 {self.current_repetition + 1}回目の入力開始")
         print(f"   目標テキスト: {self.session_text}")
         
+        # データ収集開始前のカメラ最終確認
+        print("   🔍 データ収集開始前のカメラ状態を確認中...")
+        if not self._verify_camera_before_collection():
+            print("   ❌ データ収集開始前のカメラ状態確認に失敗しました")
+            return False
+        
         # データ収集セッションを開始
         self.data_collector.start_collection_session(self.session_text)
         self.current_char_index = 0
@@ -202,10 +353,18 @@ class TrainingDataCollector:
         start_time = time.time()
         
         while True:
-            # フレーム取得
-            frame = self.camera.read_frame()
+            # フレーム取得（リトライ処理付き）
+            frame = None
+            for retry in range(3):  # 最大3回リトライ
+                frame = self.camera.read_frame()
+                if frame is not None:
+                    break
+                else:
+                    print(f"   ⚠️ フレーム取得失敗 (リトライ {retry + 1}/3)")
+                    time.sleep(0.5)
+            
             if frame is None:
-                print("❌ カメラからのフレーム取得に失敗しました")
+                print("❌ カメラからのフレーム取得に失敗しました（3回リトライ後）")
                 return False
             
             frame_count += 1

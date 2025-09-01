@@ -181,13 +181,23 @@ class KeyboardIntentDataset(Dataset):
                 train_samples.extend(user_samples)
                 print(f"   📝 ユーザー {user_id}: サンプル数 {len(user_samples)} < 2 のため全件を訓練データに")
             else:
-                # 訓練/検証分割
-                user_train, user_val = train_test_split(
-                    user_samples, 
-                    train_size=self.train_ratio, 
-                    random_state=42,
-                    stratify=[s.get('target_char', '').lower() for s in user_samples]
-                )
+                # 訓練/検証分割（クラス数が少ない場合はstratifyを無効化）
+                try:
+                    user_train, user_val = train_test_split(
+                        user_samples, 
+                        train_size=self.train_ratio, 
+                        random_state=42,
+                        stratify=[s.get('target_char', '').lower() for s in user_samples]
+                    )
+                except ValueError as e:
+                    # stratifyでエラーが発生した場合（クラス数が少ない場合）
+                    print(f"   ⚠️ stratify分割でエラー: {e}")
+                    print(f"   📝 通常分割を使用します")
+                    user_train, user_val = train_test_split(
+                        user_samples, 
+                        train_size=self.train_ratio, 
+                        random_state=42
+                    )
                 train_samples.extend(user_train)
                 val_samples.extend(user_val)
                 print(f"   📝 ユーザー {user_id}: 訓練 {len(user_train)}, 検証 {len(user_val)}")
@@ -233,6 +243,9 @@ class KeyboardIntentDataset(Dataset):
         if not self.feature_extractor:
             self.feature_extractor = FeatureExtractor(sequence_length=self.sequence_length)
         
+        # 軌跡データの長さを統一
+        trajectory = self._normalize_trajectory_length(trajectory)
+        
         features_np = self.feature_extractor.extract_from_trajectory(trajectory)
         features = torch.FloatTensor(features_np)
         
@@ -257,6 +270,22 @@ class KeyboardIntentDataset(Dataset):
         """非推奨（FeatureExtractorに移管済み）。互換のため残置。"""
         return features
     
+    def _normalize_trajectory_length(self, trajectory: List[Dict]) -> List[Dict]:
+        """軌跡データの長さをsequence_lengthに統一"""
+        if len(trajectory) == self.sequence_length:
+            return trajectory
+        elif len(trajectory) > self.sequence_length:
+            # 長すぎる場合は中央部分を抽出
+            start_idx = (len(trajectory) - self.sequence_length) // 2
+            return trajectory[start_idx:start_idx + self.sequence_length]
+        else:
+            # 短すぎる場合は最後のフレームを繰り返し
+            normalized = trajectory.copy()
+            last_frame = trajectory[-1] if trajectory else {}
+            while len(normalized) < self.sequence_length:
+                normalized.append(last_frame)
+            return normalized
+    
     def _augment_features(self, features: torch.FloatTensor) -> torch.FloatTensor:
         """特徴量のデータ拡張"""
         features = features.clone()
@@ -265,22 +294,14 @@ class KeyboardIntentDataset(Dataset):
         noise = torch.randn_like(features) * self.noise_std
         features = features + noise
         
-        # 時間軸のわずかな伸縮（ランダムに1-2フレーム削除または追加）
-        if random.random() < 0.3:  # 30%の確率で実行
-            if random.random() < 0.5 and features.shape[0] > 2:
-                # ランダムに1フレーム削除
-                remove_idx = random.randint(0, features.shape[0] - 1)
-                features = torch.cat([features[:remove_idx], features[remove_idx+1:]])
-            else:
-                # ランダムに1フレームを複製
-                duplicate_idx = random.randint(0, features.shape[0] - 1)
-                duplicate_frame = features[duplicate_idx:duplicate_idx+1]
-                features = torch.cat([features[:duplicate_idx+1], duplicate_frame, features[duplicate_idx+1:]])
-        
         # 座標の微小な平行移動
         if random.random() < 0.2:  # 20%の確率で実行
             shift = torch.randn(2) * 0.01  # 微小な移動
             features[:, :2] = features[:, :2] + shift.unsqueeze(0)
+        
+        # 形状の保証
+        assert features.shape == (self.sequence_length, self.feature_dim), \
+            f"データ拡張後の形状が不正: {features.shape}, 期待: ({self.sequence_length}, {self.feature_dim})"
         
         return features
     

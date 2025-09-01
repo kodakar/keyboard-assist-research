@@ -14,10 +14,14 @@ from typing import List, Tuple, Optional, Dict
 import json
 
 # 既存のモジュールをインポート
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+
 from src.core.camera import Camera
 from src.core.hand_tracker import HandTracker
 from src.input.keyboard_map import KeyboardMap
-from src.processing.coordinate_transformer import CoordinateTransformer
+from src.processing.coordinate_transformer import WorkAreaTransformer
 from src.processing.models.hand_lstm import BasicHandLSTM
 from src.processing.feature_extractor import FeatureExtractor
 
@@ -40,12 +44,11 @@ class PredictionMode:
         self.camera = None
         self.hand_tracker = None
         self.keyboard_map = None
-        self.coordinate_transformer = None
+        self.transformer = None
         self.model = None
         
-        # 予測用のバッファ
-        self.frame_buffer = deque(maxlen=60)  # 60フレーム分の特徴量
-        self.trajectory_buffer = deque(maxlen=30)  # 30フレーム分の軌跡
+        # 予測用のバッファ（学習システムと統一）
+        self.trajectory_buffer = deque(maxlen=60)  # 60フレーム分の軌跡データ
         
         # 予測結果
         self.current_prediction = None
@@ -67,6 +70,8 @@ class PredictionMode:
         # ラベルマップ（学習時に保存したものを使用）
         self.KEY_CHARS = None
         self.label_map_loaded = False
+        
+        # 特徴量抽出器（学習システムと統一）
         self.feature_extractor = FeatureExtractor(sequence_length=60, fps=30.0)
         
         print(f"🎯 予測モード初期化完了")
@@ -98,20 +103,49 @@ class PredictionMode:
             print("✅ 手追跡初期化完了")
             
             # キーボードマップの初期化
-            self.keyboard_map = KeyboardMap()
+            self.keyboard_map = KeyboardMap(self.keyboard_map_path)
+            
+            # キーボードマッピングの確認
             if not self.keyboard_map.key_positions:
-                print("⚠️ キーボードマッピングが存在しません")
-                print("   マッピングを開始します...")
+                print("⚠️ キーボードマッピングが未設定です")
+                print("   キーボードマッピングを開始します...")
                 if not self.keyboard_map.start_calibration():
                     print("❌ キーボードマッピングに失敗しました")
                     return False
+            else:
+                print("\n📁 保存済みのキーボード設定ファイル (keyboard_map.json) が見つかりました。")
+                print("\n1: 保存した設定を再利用する")
+                print("2: 新しくキャリブレーションをやり直す")
+                
+                while True:
+                    try:
+                        choice = input("\nどちらにしますか？ (1/2): ").strip()
+                        
+                        if choice == "1":
+                            print("✅ 保存した設定を再利用します。")
+                            break
+                        elif choice == "2":
+                            print("🔄 新しいキャリブレーションを開始します...")
+                            if not self.keyboard_map.start_calibration():
+                                print("❌ キーボードマッピングに失敗しました")
+                                return False
+                            break
+                        else:
+                            print("❌ 無効な選択です。1 または 2 を入力してください。")
+                            
+                    except KeyboardInterrupt:
+                        print("\n❌ プログラムを終了します。")
+                        return False
+                    except EOFError:
+                        print("\n❌ プログラムを終了します。")
+                        return False
             
             # 座標変換器の初期化
-            self.coordinate_transformer = CoordinateTransformer(self.keyboard_map_path)
-            self.coordinate_transformer.set_screen_size(width, height)
-            self.coordinate_transformer.set_keyboard_corners(
-                self.keyboard_map.get_keyboard_corners()
-            )
+            self.transformer = WorkAreaTransformer(self.keyboard_map_path)
+            # キーボードマップから作業領域の4隅を取得
+            keyboard_corners = self.keyboard_map.get_work_area_corners()
+            if keyboard_corners is not None:
+                self.transformer.set_work_area_corners(keyboard_corners)
             print("✅ 座標変換器初期化完了")
             
             # モデルの読み込み
@@ -185,31 +219,39 @@ class PredictionMode:
             print(f"❌ モデル読み込みエラー: {e}")
             return False
     
-    def extract_features(self, hand_landmarks) -> Optional[np.ndarray]:
-        """手のランドマークから特徴量を抽出（共通抽出器に合わせた1フレーム分）"""
+    def process_frame(self, frame: np.ndarray) -> Optional[Dict]:
+        """フレームを処理して軌跡データを生成"""
         try:
-            # キーボード空間での指の座標を取得
+            # 手追跡
+            results = self.hand_tracker.detect_hands(frame)
+            if not results.multi_hand_landmarks:
+                return None
+            
+            # 最初の手のランドマークを取得
+            hand_landmarks = results.multi_hand_landmarks[0]
+            
+            # 人差し指の座標を取得
             index_finger = hand_landmarks.landmark[8]  # 人差し指先端
             
-            # ピクセル座標をキーボード空間に変換
-            kb_coords = self.coordinate_transformer.pixel_to_keyboard_space(
+            # ピクセル座標を作業領域空間に変換
+            wa_coords = self.transformer.pixel_to_work_area(
                 index_finger.x, index_finger.y
             )
             
-            if kb_coords is None:
+            if wa_coords is None:
                 return None
             
-            kb_x, kb_y = kb_coords
+            wa_x, wa_y = wa_coords
             
             # 最近傍3キーへの相対座標を取得
-            nearest_keys = self.coordinate_transformer.get_nearest_keys_with_relative_coords(
-                kb_x, kb_y, top_k=3
+            nearest_keys = self.transformer.get_nearest_keys_with_relative_coords(
+                wa_x, wa_y, top_k=3
             )
             
-            # 共通仕様のフレーム辞書を組み立てて1フレーム分抽出
-            frame_dict = {
-                'keyboard_space_coords': {
-                    'index_finger': {'x': kb_x, 'y': kb_y}
+            # 軌跡データフレームを構築（学習システムと統一）
+            frame_data = {
+                'work_area_coords': {
+                    'index_finger': {'x': wa_x, 'y': wa_y}
                 },
                 'nearest_keys_relative': [
                     {
@@ -220,44 +262,25 @@ class PredictionMode:
                     } for k in nearest_keys[:3]
                 ]
             }
-
-            # 直近バッファから速度・加速度は共通抽出器側で計算するため
-            # ここでは単フレームを返し、バッファ側で60フレームの配列を作る
-            # ただし予測処理は従来のframe_bufferを維持
-
-            # 単フレームの15次元化のため一時的に抽出器を使う
-            features_np = self.feature_extractor.extract_from_trajectory([frame_dict])
-            return features_np[0]
+            
+            return frame_data
             
         except Exception as e:
-            print(f"⚠️ 特徴量抽出エラー: {e}")
+            print(f"⚠️ フレーム処理エラー: {e}")
             return None
-    
-    def normalize_features(self, features: np.ndarray) -> np.ndarray:
-        """特徴量の正規化"""
-        # 座標系の正規化（0-1の範囲に収める）
-        features[:2] = np.clip(features[:2], 0.0, 1.0)
-        
-        # 相対座標の正規化（-5から5の範囲に収める）
-        features[2:8] = np.clip(features[2:8], -5.0, 5.0)
-        
-        # 距離の正規化（0から10の範囲に収める）
-        features[8:11] = np.clip(features[8:11], 0.0, 10.0)
-        
-        # 速度・加速度の正規化（-2から2の範囲に収める）
-        features[11:] = np.clip(features[11:], -2.0, 2.0)
-        
-        return features
     
     def predict_intent(self) -> Optional[List[Tuple[str, float]]]:
         """入力意図を予測"""
         try:
-            if len(self.frame_buffer) < 60:
+            if len(self.trajectory_buffer) < 60:
                 return None
             
-            # 特徴量をテンソルに変換
-            features = np.array(list(self.frame_buffer))
-            features_tensor = torch.FloatTensor(features).unsqueeze(0).to(self.device)
+            # 軌跡データを特徴量に変換（学習システムと統一）
+            trajectory_data = list(self.trajectory_buffer)
+            features_np = self.feature_extractor.extract_from_trajectory(trajectory_data)
+            
+            # テンソルに変換
+            features_tensor = torch.FloatTensor(features_np).unsqueeze(0).to(self.device)
             
             # 推論時間の計測
             start_time = time.time()
@@ -289,66 +312,52 @@ class PredictionMode:
     def run_prediction_mode(self):
         """予測モードの実行"""
         print("🚀 予測モードを開始します")
-        print("   操作説明:")
-        print("   - D: デバッグ情報の表示/非表示")
-        print("   - E: 評価モードの切り替え")
-        print("   - R: 評価のリセット")
+        print("   操作方法:")
+        print("   - 手をカメラに映してキーボード入力の意図を予測")
         print("   - ESC: 終了")
+        print("   - 'd': デバッグ情報の表示/非表示")
+        print("   - 'e': 評価モードの切り替え")
+        print("   - 'r': 評価のリセット")
         
         try:
             while True:
                 # フレーム取得
                 frame = self.camera.read_frame()
                 if frame is None:
-                    print("❌ カメラからのフレーム取得に失敗しました")
-                    break
+                    continue
                 
-                # 手の検出
-                results = self.hand_tracker.detect_hands(frame)
-                self.last_results = results  # 結果を保存
+                # フレーム処理
+                frame_data = self.process_frame(frame)
+                if frame_data is not None:
+                    self.trajectory_buffer.append(frame_data)
                 
-                if results.multi_hand_landmarks:
-                    hand_landmarks = results.multi_hand_landmarks[0]
-                    
-                    # 特徴量の抽出
-                    features = self.extract_features(hand_landmarks)
-                    
-                    if features is not None:
-                        # フレームバッファに追加
-                        self.frame_buffer.append(features)
-                        
-                        # 軌跡バッファに追加
-                        index_finger = hand_landmarks.landmark[8]
-                        self.trajectory_buffer.append((index_finger.x, index_finger.y))
-                        
-                        # 60フレーム溜まったら予測実行
-                        if len(self.frame_buffer) == 60:
-                            predictions = self.predict_intent()
-                            if predictions:
-                                self.current_prediction = predictions
-                                self.prediction_history.append(predictions)
+                # 予測実行
+                if len(self.trajectory_buffer) >= 60:
+                    predictions = self.predict_intent()
+                    if predictions:
+                        self.current_prediction = predictions
+                        self.prediction_history.append(predictions)
                 
-                # 画面表示の更新
-                frame = self.update_display(frame)
+                # 画面描画
+                self.draw_frame(frame)
                 
-                # 画面に表示
-                cv2.imshow('Intent Prediction Mode', frame)
-                
-                # キー入力の処理
+                # キー入力処理
                 key = cv2.waitKey(1) & 0xFF
                 if key == 27:  # ESC
                     break
-                elif key == ord('d') or key == ord('D'):  # Dキーでデバッグ情報トグル
+                elif key == ord('d'):
                     self.show_debug = not self.show_debug
-                    print(f"デバッグ情報: {'表示' if self.show_debug else '非表示'}")
-                elif key == ord('e') or key == ord('E'):  # Eキーで評価モード切り替え
+                elif key == ord('e'):
                     self.evaluation_mode = not self.evaluation_mode
-                    print(f"評価モード: {'有効' if self.evaluation_mode else '無効'}")
-                elif key == ord('r') or key == ord('R'):  # Rキーで評価リセット
+                    if self.evaluation_mode:
+                        print("📊 評価モードを有効にしました")
+                    else:
+                        print("📊 評価モードを無効にしました")
+                elif key == ord('r'):
                     self.reset_evaluation()
-                    print("評価をリセットしました")
+                    print("🔄 評価をリセットしました")
                 
-                # FPSの計算
+                # FPS計算
                 self.frame_count += 1
                 if time.time() - self.last_fps_time >= 1.0:
                     self.fps = self.frame_count
@@ -356,130 +365,77 @@ class PredictionMode:
                     self.last_fps_time = time.time()
         
         except KeyboardInterrupt:
-            print("\n⚠️ 予測モードがユーザーによって中断されました")
-        except Exception as e:
-            print(f"\n❌ 予測モードエラー: {e}")
+            print("\n⚠️ ユーザーによって中断されました")
+        
         finally:
             self.cleanup()
     
-    def update_display(self, frame: np.ndarray) -> np.ndarray:
-        """画面表示の更新"""
-        h, w = frame.shape[:2]
-        
-        # 手のランドマークを描画
-        if hasattr(self, 'hand_tracker') and hasattr(self, 'last_results'):
-            frame = self.hand_tracker.draw_landmarks(frame, self.last_results)
-        
-        # キーボードマップを可視化
+    def draw_frame(self, frame: np.ndarray):
+        """フレームの描画"""
+        # キーボードマップの描画
         if self.keyboard_map:
-            frame = self.keyboard_map.visualize(frame)
+            self.keyboard_map.visualize(frame)
         
-        # 予測結果の表示
+        # 手追跡の描画
+        if self.hand_tracker:
+            # 手の検出結果を取得して描画
+            results = self.hand_tracker.detect_hands(frame)
+            if results.multi_hand_landmarks:
+                self.hand_tracker.draw_landmarks(frame, results)
+        
+        # 予測結果の描画
         if self.current_prediction:
-            self.draw_predictions(frame, self.current_prediction)
+            self.draw_prediction(frame)
         
-        # 手の軌跡を描画
-        self.draw_trajectory(frame)
-        
-        # 評価モードの表示
+        # 評価情報の描画
         if self.evaluation_mode:
             self.draw_evaluation_info(frame)
         
-        # デバッグ情報の表示
+        # デバッグ情報の描画
         if self.show_debug:
             self.draw_debug_info(frame)
         
-        # 操作説明の表示
-        instruction_text = "D: デバッグ | E: 評価モード | R: リセット | ESC: 終了"
-        cv2.putText(frame, instruction_text, (20, h - 20), 
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.6, (200, 200, 200), 1)
+        # 基本情報の描画
+        self.draw_basic_info(frame)
         
-        return frame
+        # 画面表示
+        cv2.imshow('Keyboard Intent Prediction', frame)
     
-    def draw_predictions(self, frame: np.ndarray, predictions: List[Tuple[str, float]]):
+    def draw_prediction(self, frame: np.ndarray):
         """予測結果の描画"""
-        h, w = frame.shape[:2]
-        
-        # 予測結果の背景
-        cv2.rectangle(frame, (w - 300, 20), (w - 20, 140), (0, 0, 0), -1)
-        cv2.rectangle(frame, (w - 300, 20), (w - 20, 140), (255, 255, 255), 2)
-        
-        # タイトル
-        cv2.putText(frame, "Prediction Results", (w - 280, 45), 
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
-        
-        # Top-3の予測結果
-        for i, (key, confidence) in enumerate(predictions):
-            y_pos = 70 + i * 25
-            color = (0, 255, 0) if i == 0 else (255, 255, 0) if i == 1 else (0, 255, 255)
-            
-            # キーと確信度
-            text = f"{key}: {confidence:.1f}%"
-            cv2.putText(frame, text, (w - 280, y_pos), 
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
-            
-            # 確信度バー
-            bar_width = int((confidence / 100.0) * 200)
-            cv2.rectangle(frame, (w - 280, y_pos + 5), (w - 280 + bar_width, y_pos + 15), color, -1)
-            cv2.rectangle(frame, (w - 280, y_pos + 5), (w - 80, y_pos + 15), (255, 255, 255), 1)
-        
-        # 最も可能性の高いキーをハイライト
-        if predictions:
-            best_key = predictions[0][0]
-            if self.keyboard_map and best_key in self.keyboard_map.key_positions:
-                key_info = self.keyboard_map.key_positions[best_key]
-                center_x = int(key_info['center_x'])
-                center_y = int(key_info['center_y'])
-                
-                # キーをハイライト
-                cv2.circle(frame, (center_x, center_y), 30, (0, 255, 0), 3)
-                cv2.putText(frame, best_key, (center_x - 10, center_y + 10), 
-                           cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 255, 0), 2)
-    
-    def draw_trajectory(self, frame: np.ndarray):
-        """手の軌跡の描画"""
-        if len(self.trajectory_buffer) < 2:
+        if not self.current_prediction:
             return
         
-        # 過去30フレームの軌跡を描画
-        for i in range(len(self.trajectory_buffer) - 1):
-            x1, y1 = self.trajectory_buffer[i]
-            x2, y2 = self.trajectory_buffer[i + 1]
-            
-            # 座標をピクセル座標に変換
-            px1 = int(x1 * frame.shape[1])
-            py1 = int(y1 * frame.shape[0])
-            px2 = int(x2 * frame.shape[1])
-            py2 = int(y2 * frame.shape[0])
-            
-            # 軌跡の色（時間に応じて変化）
-            alpha = i / len(self.trajectory_buffer)
-            color = (int(255 * alpha), int(255 * (1 - alpha)), 255)
-            
-            cv2.line(frame, (px1, py1), (px2, py2), color, 2)
+        # 予測結果の背景
+        cv2.rectangle(frame, (10, 10), (300, 120), (0, 0, 0), -1)
+        cv2.rectangle(frame, (10, 10), (300, 120), (255, 255, 255), 2)
+        
+        # タイトル
+        cv2.putText(frame, "Prediction Results", (20, 30), 
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+        
+        # Top-3予測結果
+        for i, (key, confidence) in enumerate(self.current_prediction[:3]):
+            color = (0, 255, 0) if i == 0 else (255, 255, 0) if i == 1 else (0, 255, 255)
+            cv2.putText(frame, f"{i+1}. {key}: {confidence:.1f}%", (20, 55 + i*20), 
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
     
     def draw_evaluation_info(self, frame: np.ndarray):
         """評価情報の描画"""
-        h, w = frame.shape[:2]
-        
         # 評価情報の背景
-        cv2.rectangle(frame, (20, 20), (400, 120), (0, 0, 0), -1)
-        cv2.rectangle(frame, (20, 20), (400, 120), (255, 255, 255), 2)
+        cv2.rectangle(frame, (10, 130), (300, 180), (0, 0, 0), -1)
+        cv2.rectangle(frame, (10, 130), (300, 180), (255, 255, 255), 2)
         
-        # テストテキスト
-        cv2.putText(frame, f"Test: {self.test_text}", (30, 45), 
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
-        
-        # 現在の文字をハイライト
+        # 現在の文字
         if self.current_char_index < len(self.test_text):
             current_char = self.test_text[self.current_char_index]
-            cv2.putText(frame, f"Current: '{current_char}'", (30, 70), 
+            cv2.putText(frame, f"Current: '{current_char}'", (20, 150), 
                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
         
         # 精度
         if self.total_predictions > 0:
             accuracy = (self.correct_predictions / self.total_predictions) * 100
-            cv2.putText(frame, f"Accuracy: {accuracy:.1f}%", (30, 95), 
+            cv2.putText(frame, f"Accuracy: {accuracy:.1f}%", (20, 170), 
                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
         
         # 予測が正解かチェック
@@ -508,7 +464,7 @@ class PredictionMode:
                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
         
         # バッファの充填状態
-        buffer_fill = (len(self.frame_buffer) / 60) * 100
+        buffer_fill = (len(self.trajectory_buffer) / 60) * 100
         cv2.putText(frame, f"Buffer: {buffer_fill:.1f}%", (30, h - 130), 
                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
         
@@ -516,13 +472,24 @@ class PredictionMode:
         if hasattr(self, 'inference_time'):
             cv2.putText(frame, f"Inference: {self.inference_time*1000:.1f}ms", (30, h - 105), 
                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
+    
+    def draw_basic_info(self, frame: np.ndarray):
+        """基本情報の描画"""
+        h, w = frame.shape[:2]
         
-        # 特徴量の値（最初の5次元のみ表示）
-        if len(self.frame_buffer) > 0:
-            latest_features = self.frame_buffer[-1]
-            if latest_features is not None:
-                cv2.putText(frame, f"Features[0-4]: {latest_features[:5][:3]}", (30, h - 80), 
-                           cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 0), 1)
+        # 基本情報の背景
+        cv2.rectangle(frame, (w - 200, 10), (w - 10, 80), (0, 0, 0), -1)
+        cv2.rectangle(frame, (w - 200, 10), (w - 10, 80), (255, 255, 255), 2)
+        
+        # タイトル
+        cv2.putText(frame, "Controls", (w - 190, 30), 
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+        
+        # 操作方法
+        cv2.putText(frame, "ESC: Quit", (w - 190, 50), 
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 255, 0), 1)
+        cv2.putText(frame, "d: Debug", (w - 190, 65), 
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 255, 0), 1)
     
     def reset_evaluation(self):
         """評価のリセット"""
@@ -562,11 +529,30 @@ def run_prediction_mode(model_path: str, keyboard_map_path: str = 'keyboard_map.
 
 
 if __name__ == "__main__":
-    # テスト用
-    model_path = "models/intent_model_latest/best_model.pth"
+    # 最新のモデルを自動検出
+    models_dir = "models"
+    if not os.path.exists(models_dir):
+        print("❌ modelsディレクトリが存在しません")
+        print("学習を先に実行してください")
+        exit(1)
+    
+    # モデルディレクトリを検索
+    model_dirs = [d for d in os.listdir(models_dir) 
+                  if d.startswith("intent_model_") and os.path.isdir(os.path.join(models_dir, d))]
+    
+    if not model_dirs:
+        print("❌ 学習済みモデルが見つかりません")
+        print("学習を先に実行してください")
+        exit(1)
+    
+    # 最新のモデルディレクトリを選択
+    latest_model_dir = sorted(model_dirs)[-1]
+    model_path = os.path.join(models_dir, latest_model_dir, "best_model.pth")
+    
+    print(f"🔍 使用するモデル: {model_path}")
     
     if os.path.exists(model_path):
         run_prediction_mode(model_path)
     else:
-        print(f"モデルファイルが存在しません: {model_path}")
+        print(f"❌ モデルファイルが存在しません: {model_path}")
         print("学習を先に実行してください")
