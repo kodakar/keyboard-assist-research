@@ -60,7 +60,12 @@ python collect_training_data.py --user-id test_user --session-text "hello" --rep
 python train_intent_model.py --data-dir data/training/test_user --epochs 10
 
 # 3. 予測モード（学習済みモデルでリアルタイム予測）
+# 最新モデルを自動選択
 python src/modes/prediction_mode.py
+
+# モデルを明示指定（例: ディレクトリ名 or .pth のフルパス）
+python src/modes/prediction_mode.py --model intent_model_YYYYMMDD_HHMMSS
+python src/modes/prediction_mode.py --model models/intent_model_YYYYMMDD_HHMMSS/best_model.pth --map keyboard_map.json
 ```
 
 #### Windows の場合
@@ -73,7 +78,12 @@ python collect_training_data.py --user-id test_user --session-text "hello" --rep
 python train_intent_model.py --data-dir data/training/test_user --epochs 10
 
 # 3. 予測モード（学習済みモデルでリアルタイム予測）
+# 最新モデルを自動選択
 python src/modes/prediction_mode.py
+
+# モデルを明示指定（例: ディレクトリ名 or .pth のフルパス）
+python src/modes/prediction_mode.py --model intent_model_YYYYMMDD_HHMMSS
+python src/modes/prediction_mode.py --model models/intent_model_YYYYMMDD_HHMMSS/best_model.pth --map keyboard_map.json
 ```
 
 ## 📖 詳細な使い方
@@ -188,15 +198,23 @@ python train_intent_model.py --data-dir data/training/user_001 --epochs 200 --le
 学習済みモデルを使ってリアルタイムでキー入力を予測します。
 
 ```bash
+# 最新モデルを自動選択
 python src/modes/prediction_mode.py
+
+# モデルを明示指定（ディレクトリ名指定 or .pth フルパス指定）
+python src/modes/prediction_mode.py --model intent_model_YYYYMMDD_HHMMSS
+python src/modes/prediction_mode.py --model models/intent_model_YYYYMMDD_HHMMSS/best_model.pth --map keyboard_map.json
 ```
 
-**機能：**
+**主な機能/UI：**
 
 - リアルタイム手追跡
-- キー入力意図の予測
-- 予測結果の表示
-- 学習済みモデルの読み込み
+- 常時の Top-3 予測を左上に表示（推論準備中は「Loading predictions...」）
+- 画面下部に Actual / Predict（二段）
+  - Actual: ユーザーが押したキー（a-z, 0-9, Space）
+  - Predict: 押した瞬間の Top-3 予測をスナップショット表示
+- 学習済みモデルの読み込み（--model で選択可能）
+- デバッグ表示・評価モードは削除し、UI を簡素化
 
 ## 🔧 トラブルシューティング
 
