@@ -54,18 +54,9 @@ class PredictionMode:
         self.current_prediction = None
         self.prediction_history = []
         
-        # 評価モード用
-        self.evaluation_mode = False
-        self.test_text = "hello world"
-        self.current_char_index = 0
-        self.correct_predictions = 0
-        self.total_predictions = 0
-        
-        # デバッグ情報
-        self.show_debug = False
-        self.frame_count = 0
-        self.fps = 0
-        self.last_fps_time = time.time()
+        # 入力評価表示用（Actual vs Predict）
+        self.last_actual_key = None
+        self.last_predicted_topk = None  # [(key, prob%), ...] をスナップショット保存
         
         # ラベルマップ（学習時に保存したものを使用）
         self.KEY_CHARS = None
@@ -109,7 +100,7 @@ class PredictionMode:
             if not self.keyboard_map.key_positions:
                 print("⚠️ キーボードマッピングが未設定です")
                 print("   キーボードマッピングを開始します...")
-                if not self.keyboard_map.start_calibration():
+                if not self.keyboard_map.start_calibration(existing_camera=self.camera):
                     print("❌ キーボードマッピングに失敗しました")
                     return False
             else:
@@ -126,7 +117,7 @@ class PredictionMode:
                             break
                         elif choice == "2":
                             print("🔄 新しいキャリブレーションを開始します...")
-                            if not self.keyboard_map.start_calibration():
+                            if not self.keyboard_map.start_calibration(existing_camera=self.camera):
                                 print("❌ キーボードマッピングに失敗しました")
                                 return False
                             break
@@ -315,9 +306,7 @@ class PredictionMode:
         print("   操作方法:")
         print("   - 手をカメラに映してキーボード入力の意図を予測")
         print("   - ESC: 終了")
-        print("   - 'd': デバッグ情報の表示/非表示")
-        print("   - 'e': 評価モードの切り替え")
-        print("   - 'r': 評価のリセット")
+        print("   - 任意のキー入力: Actualとして記録（スペース可）")
         
         try:
             while True:
@@ -345,24 +334,18 @@ class PredictionMode:
                 key = cv2.waitKey(1) & 0xFF
                 if key == 27:  # ESC
                     break
-                elif key == ord('d'):
-                    self.show_debug = not self.show_debug
-                elif key == ord('e'):
-                    self.evaluation_mode = not self.evaluation_mode
-                    if self.evaluation_mode:
-                        print("📊 評価モードを有効にしました")
-                    else:
-                        print("📊 評価モードを無効にしました")
-                elif key == ord('r'):
-                    self.reset_evaluation()
-                    print("🔄 評価をリセットしました")
+                else:
+                    # 実キー入力のキャプチャ（a-z, 0-9, SPACE）
+                    if (ord('a') <= key <= ord('z')) or (ord('0') <= key <= ord('9')) or key == 32:
+                        actual_char = ' ' if key == 32 else chr(key).lower()
+                        self.last_actual_key = actual_char
+                        # その瞬間の予測Top-3をスナップショット
+                        if self.current_prediction and len(self.current_prediction) > 0:
+                            self.last_predicted_topk = list(self.current_prediction[:3])
+                        else:
+                            self.last_predicted_topk = None
                 
-                # FPS計算
-                self.frame_count += 1
-                if time.time() - self.last_fps_time >= 1.0:
-                    self.fps = self.frame_count
-                    self.frame_count = 0
-                    self.last_fps_time = time.time()
+                # FPS計算は無効化（デバッグ機能削除に伴い）
         
         except KeyboardInterrupt:
             print("\n⚠️ ユーザーによって中断されました")
@@ -383,23 +366,49 @@ class PredictionMode:
             if results.multi_hand_landmarks:
                 self.hand_tracker.draw_landmarks(frame, results)
         
-        # 予測結果の描画
+        # 予測結果の描画（未準備時はローディング表示）
         if self.current_prediction:
             self.draw_prediction(frame)
-        
-        # 評価情報の描画
-        if self.evaluation_mode:
-            self.draw_evaluation_info(frame)
-        
-        # デバッグ情報の描画
-        if self.show_debug:
-            self.draw_debug_info(frame)
-        
-        # 基本情報の描画
-        self.draw_basic_info(frame)
+        else:
+            self.draw_loading_indicator(frame)
+
+        # Actual vs Predict の描画
+        self.draw_actual_vs_predict(frame)
         
         # 画面表示
         cv2.imshow('Keyboard Intent Prediction', frame)
+
+    def draw_actual_vs_predict(self, frame: np.ndarray):
+        """画面下部に Actual / Predict を二段表示"""
+        h, w = frame.shape[:2]
+        margin = 10
+        box_height = 70
+        x1, y1 = margin, h - (box_height + margin)
+        x2, y2 = w - margin, h - margin
+        
+        # 背景
+        cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 0), -1)
+        cv2.rectangle(frame, (x1, y1), (x2, y2), (255, 255, 255), 1)
+        
+        # テキスト内容
+        actual_text = f"Actual: {self.last_actual_key if self.last_actual_key is not None else '-'}"
+        # Predictはキー押下時のTop-3スナップショットのみ表示
+        if self.last_predicted_topk and len(self.last_predicted_topk) > 0:
+            predict_items = [f"{k}({p:.0f}%)" for k, p in self.last_predicted_topk]
+            predict_text = "Predict: " + " | ".join(predict_items)
+        else:
+            predict_text = "Predict: -"
+        
+        # 描画
+        cv2.putText(frame, actual_text, (x1 + 12, y1 + 25), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
+        cv2.putText(frame, predict_text, (x1 + 12, y1 + 50), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+
+    def draw_loading_indicator(self, frame: np.ndarray):
+        """予測準備中のローディング表示（左上）"""
+        cv2.rectangle(frame, (10, 10), (260, 60), (0, 0, 0), -1)
+        cv2.rectangle(frame, (10, 10), (260, 60), (255, 255, 255), 1)
+        cv2.putText(frame, "Loading predictions...", (20, 40),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (200, 200, 200), 2)
     
     def draw_prediction(self, frame: np.ndarray):
         """予測結果の描画"""
@@ -420,83 +429,9 @@ class PredictionMode:
             cv2.putText(frame, f"{i+1}. {key}: {confidence:.1f}%", (20, 55 + i*20), 
                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
     
-    def draw_evaluation_info(self, frame: np.ndarray):
-        """評価情報の描画"""
-        # 評価情報の背景
-        cv2.rectangle(frame, (10, 130), (300, 180), (0, 0, 0), -1)
-        cv2.rectangle(frame, (10, 130), (300, 180), (255, 255, 255), 2)
-        
-        # 現在の文字
-        if self.current_char_index < len(self.test_text):
-            current_char = self.test_text[self.current_char_index]
-            cv2.putText(frame, f"Current: '{current_char}'", (20, 150), 
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
-        
-        # 精度
-        if self.total_predictions > 0:
-            accuracy = (self.correct_predictions / self.total_predictions) * 100
-            cv2.putText(frame, f"Accuracy: {accuracy:.1f}%", (20, 170), 
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
-        
-        # 予測が正解かチェック
-        if self.current_prediction and self.evaluation_mode:
-            predicted_key = self.current_prediction[0][0]
-            if self.current_char_index < len(self.test_text):
-                target_char = self.test_text[self.current_char_index]
-                if predicted_key.lower() == target_char.lower():
-                    self.correct_predictions += 1
-                self.total_predictions += 1
+    # 評価・デバッグ関連の描画は削除しました
     
-    def draw_debug_info(self, frame: np.ndarray):
-        """デバッグ情報の描画"""
-        h, w = frame.shape[:2]
-        
-        # デバッグ情報の背景
-        cv2.rectangle(frame, (20, h - 200), (400, h - 20), (0, 0, 0), -1)
-        cv2.rectangle(frame, (20, h - 200), (400, h - 20), (255, 255, 255), 2)
-        
-        # タイトル
-        cv2.putText(frame, "Debug Info", (30, h - 180), 
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
-        
-        # フレームレート
-        cv2.putText(frame, f"FPS: {self.fps}", (30, h - 155), 
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
-        
-        # バッファの充填状態
-        buffer_fill = (len(self.trajectory_buffer) / 60) * 100
-        cv2.putText(frame, f"Buffer: {buffer_fill:.1f}%", (30, h - 130), 
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
-        
-        # 推論時間
-        if hasattr(self, 'inference_time'):
-            cv2.putText(frame, f"Inference: {self.inference_time*1000:.1f}ms", (30, h - 105), 
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
-    
-    def draw_basic_info(self, frame: np.ndarray):
-        """基本情報の描画"""
-        h, w = frame.shape[:2]
-        
-        # 基本情報の背景
-        cv2.rectangle(frame, (w - 200, 10), (w - 10, 80), (0, 0, 0), -1)
-        cv2.rectangle(frame, (w - 200, 10), (w - 10, 80), (255, 255, 255), 2)
-        
-        # タイトル
-        cv2.putText(frame, "Controls", (w - 190, 30), 
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
-        
-        # 操作方法
-        cv2.putText(frame, "ESC: Quit", (w - 190, 50), 
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 255, 0), 1)
-        cv2.putText(frame, "d: Debug", (w - 190, 65), 
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 255, 0), 1)
-    
-    def reset_evaluation(self):
-        """評価のリセット"""
-        self.current_char_index = 0
-        self.correct_predictions = 0
-        self.total_predictions = 0
-        self.prediction_history = []
+    # 評価リセット機能は削除しました
     
     def cleanup(self):
         """リソースのクリーンアップ"""
@@ -529,30 +464,46 @@ def run_prediction_mode(model_path: str, keyboard_map_path: str = 'keyboard_map.
 
 
 if __name__ == "__main__":
-    # 最新のモデルを自動検出
+    import argparse
+    parser = argparse.ArgumentParser(description='リアルタイム予測モード')
+    parser.add_argument('--model', type=str, default=None,
+                        help='使用するモデル。models配下のディレクトリ名（intent_model_YYYYMMDD_HHMMSS）または.pthのフルパス')
+    parser.add_argument('--map', type=str, default='keyboard_map.json',
+                        help='キーボードマップJSONのパス (default: keyboard_map.json)')
+    args = parser.parse_args()
+
     models_dir = "models"
-    if not os.path.exists(models_dir):
-        print("❌ modelsディレクトリが存在しません")
-        print("学習を先に実行してください")
-        exit(1)
-    
-    # モデルディレクトリを検索
-    model_dirs = [d for d in os.listdir(models_dir) 
-                  if d.startswith("intent_model_") and os.path.isdir(os.path.join(models_dir, d))]
-    
-    if not model_dirs:
-        print("❌ 学習済みモデルが見つかりません")
-        print("学習を先に実行してください")
-        exit(1)
-    
-    # 最新のモデルディレクトリを選択
-    latest_model_dir = sorted(model_dirs)[-1]
-    model_path = os.path.join(models_dir, latest_model_dir, "best_model.pth")
-    
-    print(f"🔍 使用するモデル: {model_path}")
-    
-    if os.path.exists(model_path):
-        run_prediction_mode(model_path)
+
+    # モデルパスの決定
+    chosen_model_path = None
+    if args.model:
+        if args.model.endswith('.pth') and os.path.exists(args.model):
+            chosen_model_path = args.model
+        else:
+            candidate = os.path.join(models_dir, args.model, 'best_model.pth')
+            if os.path.exists(candidate):
+                chosen_model_path = candidate
+            else:
+                print(f"❌ 指定モデルが見つかりません: {args.model}")
+                exit(1)
     else:
-        print(f"❌ モデルファイルが存在しません: {model_path}")
+        # 最新モデルを自動選択
+        if not os.path.exists(models_dir):
+            print("❌ modelsディレクトリが存在しません")
+            print("学習を先に実行してください")
+            exit(1)
+        model_dirs = [d for d in os.listdir(models_dir)
+                      if d.startswith('intent_model_') and os.path.isdir(os.path.join(models_dir, d))]
+        if not model_dirs:
+            print("❌ 学習済みモデルが見つかりません")
+            print("学習を先に実行してください")
+            exit(1)
+        latest_model_dir = sorted(model_dirs)[-1]
+        chosen_model_path = os.path.join(models_dir, latest_model_dir, 'best_model.pth')
+
+    print(f"🔍 使用するモデル: {chosen_model_path}")
+    if os.path.exists(chosen_model_path):
+        run_prediction_mode(chosen_model_path, keyboard_map_path=args.map)
+    else:
+        print(f"❌ モデルファイルが存在しません: {chosen_model_path}")
         print("学習を先に実行してください")
