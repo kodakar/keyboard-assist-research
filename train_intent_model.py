@@ -504,23 +504,12 @@ class IntentModelTrainer:
         dataset = self.val_loader.dataset
         original_dataset = self._get_original_dataset()
         
-        # 実際に使用されたクラスを特定
+        # 実際に使用されたクラスを特定（予測または正解に登場したクラスのみ）
         unique_labels = sorted(list(set(labels + predictions)))
         target_names = [original_dataset.index_to_key(i) for i in unique_labels]
-        
-        # 混同行列のサイズを調整
-        cm_adjusted = np.zeros((len(unique_labels), len(unique_labels)), dtype=int)
-        for i, true_label in enumerate(unique_labels):
-            for j, pred_label in enumerate(unique_labels):
-                if true_label in labels and pred_label in predictions:
-                    # 実際の混同行列から値を取得
-                    true_idx = labels.index(true_label) if true_label in labels else 0
-                    pred_idx = predictions.index(pred_label) if pred_label in predictions else 0
-                    if true_idx < len(labels) and pred_idx < len(predictions):
-                        cm_adjusted[i, j] = 1  # 簡易的な値
-        
-        # 混同行列の計算（調整済み）
-        cm = cm_adjusted
+
+        # 実データから混同行列を計算
+        cm = confusion_matrix(labels, predictions, labels=unique_labels)
         
         report = classification_report(labels, predictions, labels=unique_labels, target_names=target_names, output_dict=True, zero_division=0)
         
