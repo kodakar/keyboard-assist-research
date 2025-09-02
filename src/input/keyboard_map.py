@@ -99,12 +99,30 @@ class KeyboardMap:
             if not all_x or not all_y:
                 return None
             
-            # 4隅の座標を計算
+            # 通常キーのサイズを取得（スペースキーを除外）
+            key_widths = []
+            key_heights = []
+            for key, pos in self.key_positions.items():
+                if isinstance(pos, dict) and key != 'space':  # スペースキーを除外
+                    if 'width' in pos:
+                        key_widths.append(pos['width'])
+                    if 'height' in pos:
+                        key_heights.append(pos['height'])
+            
+            # 通常キーの平均サイズを計算
+            avg_key_width = np.mean(key_widths) if key_widths else 0.05
+            avg_key_height = np.mean(key_heights) if key_heights else 0.05
+            
+            # 上下左右1キー分の余白を追加
+            margin_x = avg_key_width
+            margin_y = avg_key_height
+            
+            # 4隅の座標を計算（余白付き）
             corners = np.array([
-                [min(all_x), min(all_y)],  # 左上
-                [max(all_x), min(all_y)],  # 右上
-                [max(all_x), max(all_y)],  # 右下
-                [min(all_x), max(all_y)]   # 左下
+                [min(all_x) - margin_x, min(all_y) - margin_y],  # 左上
+                [max(all_x) + margin_x, min(all_y) - margin_y],  # 右上
+                [max(all_x) + margin_x, max(all_y) + margin_y],  # 右下
+                [min(all_x) - margin_x, max(all_y) + margin_y]   # 左下
             ], dtype=np.float32)
             
             return corners

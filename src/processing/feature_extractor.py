@@ -1,6 +1,6 @@
 """
 共通特徴量抽出モジュール
-学習・推論で同一の前処理（15次元×時系列）を使用するためのユーティリティ
+学習・推論で同一の前処理（18次元×時系列）を使用するためのユーティリティ
 """
 
 from typing import Dict, List
@@ -12,7 +12,7 @@ class FeatureExtractor:
 
     def __init__(self, sequence_length: int = 60, fps: float = 30.0):
         self.sequence_length = sequence_length
-        self.feature_dim = 15  # 2 + 6 + 3 + 4
+        self.feature_dim = 18  # 2 + 6 + 3 + 4 + 3 (新規追加)
         self.fps = fps
 
     def extract_from_trajectory(self, trajectory_data: List[Dict]) -> np.ndarray:
@@ -91,23 +91,73 @@ class FeatureExtractor:
             except (IndexError, TypeError):
                 vxa, vya, axa, aya = 0.0, 0.0, 0.0, 0.0
 
+            # 新規追加: 3つの新しい特徴量
+            # 振幅（x方向）: 過去10フレーム分のx座標の標準偏差
+            amplitude_x = 0.0
+            start_idx = max(0, i-9)  # 過去10フレーム分の開始インデックス
+            if i > 0:  # 過去のフレームがある場合
+                past_x = idx_x[start_idx:i]  # i-9からi-1まで（現在フレームは含まない）
+                amplitude_x = np.std(past_x)
+            
+            # 振幅（y方向）: 過去10フレーム分のy座標の標準偏差
+            amplitude_y = 0.0
+            if i > 0:  # 過去のフレームがある場合
+                past_y = idx_y[start_idx:i]  # i-9からi-1まで（現在フレームは含まない）
+                amplitude_y = np.std(past_y)
+            
+            # 方向転換の頻度: 過去10フレーム分のx方向速度の符号変化回数を正規化
+            direction_change_freq = 0.0
+            if i > 0:  # 過去のフレームがある場合
+                past_vel_x = vel_x[start_idx:i]  # i-9からi-1まで（現在フレームは含まない）
+                direction_change_freq = self._calculate_direction_change_frequency(past_vel_x)
+
             features[i] = np.concatenate([
                 np.array([finger_x, finger_y], dtype=np.float32),
                 rel,
                 dists,
-                np.array([vxa, vya, axa, aya], dtype=np.float32)
+                np.array([vxa, vya, axa, aya], dtype=np.float32),
+                np.array([amplitude_x, amplitude_y, direction_change_freq], dtype=np.float32)
             ])
 
         # 正規化/クリップ
-        features[:, :2] = np.clip(features[:, :2], 0.0, 1.0)
-        features[:, 2:8] = np.clip(features[:, 2:8], -5.0, 5.0)
-        features[:, 8:11] = np.clip(features[:, 8:11], 0.0, 10.0)
-        features[:, 11:] = np.clip(features[:, 11:], -5.0, 5.0)
+        features[:, :2] = np.clip(features[:, :2], 0.0, 1.0)  # 指の座標
+        features[:, 2:8] = np.clip(features[:, 2:8], -5.0, 5.0)  # 相対座標
+        features[:, 8:11] = np.clip(features[:, 8:11], 0.0, 10.0)  # 距離
+        features[:, 11:15] = np.clip(features[:, 11:15], -5.0, 5.0)  # 速度・加速度
+        features[:, 15:18] = np.clip(features[:, 15:18], 0.0, 1.0)  # 新規特徴量（振幅・方向転換頻度）
 
         # 出力形状の保証
         assert features.shape == (self.sequence_length, self.feature_dim), \
             f"特徴量の形状が不正: {features.shape}, 期待: ({self.sequence_length}, {self.feature_dim})"
 
         return features
+
+    def _calculate_direction_change_frequency(self, velocity_sequence: np.ndarray) -> float:
+        """
+        速度シーケンスから方向転換の頻度を計算
+        
+        Args:
+            velocity_sequence: 速度の配列
+            
+        Returns:
+            direction_change_freq: 方向転換の頻度（0.0-1.0）
+        """
+        if len(velocity_sequence) < 2:
+            return 0.0
+        
+        # 符号の変化を検出
+        signs = np.sign(velocity_sequence)
+        sign_changes = 0
+        
+        for i in range(1, len(signs)):
+            if signs[i] != signs[i-1] and signs[i-1] != 0:  # 0を除く
+                sign_changes += 1
+        
+        # フレーム数で正規化（最大値は1.0）
+        max_possible_changes = len(velocity_sequence) - 1
+        if max_possible_changes > 0:
+            return sign_changes / max_possible_changes
+        else:
+            return 0.0
 
 

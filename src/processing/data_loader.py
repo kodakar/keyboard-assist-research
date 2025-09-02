@@ -65,7 +65,7 @@ class KeyboardIntentDataset(Dataset):
         self.samples = self._split_train_val()
         
         # 特徴量の次元数（固定）
-        self.feature_dim = 15
+        self.feature_dim = 18
         
         # 特徴量抽出器のインスタンス化
         self.feature_extractor = FeatureExtractor(sequence_length=self.sequence_length)
@@ -299,9 +299,42 @@ class KeyboardIntentDataset(Dataset):
             shift = torch.randn(2) * 0.01  # 微小な移動
             features[:, :2] = features[:, :2] + shift.unsqueeze(0)
         
+        # 人工的な震えの追加（50%の確率で実行）
+        if random.random() < 0.5:
+            features = self._add_artificial_tremor(features)
+        
         # 形状の保証
         assert features.shape == (self.sequence_length, self.feature_dim), \
             f"データ拡張後の形状が不正: {features.shape}, 期待: ({self.sequence_length}, {self.feature_dim})"
+        
+        return features
+    
+    def _add_artificial_tremor(self, features: torch.FloatTensor) -> torch.FloatTensor:
+        """人工的な震えを特徴量に追加"""
+        features = features.clone()
+        
+        # 基本となる正弦波のパラメータをランダムに決定
+        frequency = random.uniform(4.0, 12.0)  # 4Hzから12Hz
+        amplitude_x = random.uniform(0.005, 0.02)  # 振幅0.005から0.02
+        amplitude_y = amplitude_x * 0.8  # y方向はx方向の80%の強さ
+        
+        # 時間軸の生成（フレーム数に基づく）
+        time_steps = torch.arange(self.sequence_length, dtype=torch.float32)
+        
+        # 正弦波の生成
+        tremor_x = amplitude_x * torch.sin(2 * torch.pi * frequency * time_steps / self.sequence_length)
+        tremor_y = amplitude_y * torch.sin(2 * torch.pi * frequency * time_steps / self.sequence_length)
+        
+        # 不規則性を加える（正規分布ノイズ、振幅の10%程度）
+        noise_x = torch.randn(self.sequence_length) * amplitude_x * 0.1
+        noise_y = torch.randn(self.sequence_length) * amplitude_y * 0.1
+        
+        # 震えデータを座標に加算
+        features[:, 0] = features[:, 0] + tremor_x + noise_x  # x座標（0列目）
+        features[:, 1] = features[:, 1] + tremor_y + noise_y  # y座標（1列目）
+        
+        # 座標が0.0から1.0の範囲に収まるようにクリッピング
+        features[:, :2] = torch.clamp(features[:, :2], 0.0, 1.0)
         
         return features
     
