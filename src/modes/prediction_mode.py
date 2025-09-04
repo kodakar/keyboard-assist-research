@@ -335,8 +335,9 @@ class PredictionMode:
                 if key == 27:  # ESC
                     break
                 else:
-                    # 実キー入力のキャプチャ（a-z, 0-9, SPACE）
-                    if (ord('a') <= key <= ord('z')) or (ord('0') <= key <= ord('9')) or key == 32:
+                    # 実キー入力のキャプチャ（印字可能文字全般を受け付け）
+                    if 32 <= key <= 126:  # ASCII印字可能文字（space ~ ~）
+                        # スペースは ' ' に、それ以外はそのまま文字として記録
                         actual_char = ' ' if key == 32 else chr(key).lower()
                         self.last_actual_key = actual_char
                         # その瞬間の予測Top-3をスナップショット

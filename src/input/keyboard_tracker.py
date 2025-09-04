@@ -12,7 +12,11 @@ class KeyboardTracker:
             self.current_key = key.char
             self.is_key_new = True  # キーが押されたときにフラグを立てる
         except AttributeError:
-            self.current_key = str(key)
+            # スペースキーの特別処理
+            if key == keyboard.Key.space:
+                self.current_key = ' '
+            else:
+                self.current_key = str(key)
             self.is_key_new = True
 
     def get_key_event(self):
