@@ -99,8 +99,8 @@ class IntentModelTrainer:
         print("📊 データセットの設定中...")
         
         try:
-            # データローダーの作成
-            self.train_loader, self.val_loader = create_data_loaders(
+            # データローダーの作成（3分割対応）
+            self.train_loader, self.val_loader, self.test_loader = create_data_loaders(
                 data_dir=self.data_dir,
                 batch_size=self.batch_size,
                 augment=True,
@@ -110,98 +110,24 @@ class IntentModelTrainer:
             if len(self.train_loader) == 0:
                 raise ValueError("訓練データローダーが空です")
             
-            # 検証データが0件の場合は警告
+            # 検証データまたはテストデータが0件の場合は警告
             if len(self.val_loader) == 0:
                 print("⚠️ 警告: 検証データが0件です。過学習の可能性があります")
-                # 元のデータセットを取得
-                original_dataset = self.train_loader.dataset
-                
-                # 検証データがない場合は、訓練データの一部を検証データとして使用
-                if len(original_dataset) >= 2:
-                    print("   📝 訓練データの一部を検証データとして使用します")
-                    # データセットを再分割
-                    train_size = int(0.8 * len(original_dataset))
-                    val_size = len(original_dataset) - train_size
-                    
-                    train_subset, val_subset = torch.utils.data.random_split(
-                        original_dataset, [train_size, val_size]
-                    )
-                    
-                    # Subsetオブジェクトに必要な属性を追加
-                    train_subset.KEY_CHARS = original_dataset.KEY_CHARS
-                    train_subset.key_to_index = original_dataset.key_to_index
-                    train_subset.index_to_key = original_dataset.index_to_key
-                    train_subset.get_class_weights = original_dataset.get_class_weights
-                    
-                    val_subset.KEY_CHARS = original_dataset.KEY_CHARS
-                    val_subset.key_to_index = original_dataset.key_to_index
-                    val_subset.index_to_key = original_dataset.index_to_key
-                    val_subset.get_class_weights = original_dataset.get_class_weights
-                    
-                    # 新しいデータローダーを作成
-                    self.train_loader = DataLoader(
-                        train_subset, 
-                        batch_size=self.batch_size, 
-                        shuffle=True, 
-                        num_workers=0
-                    )
-                    self.val_loader = DataLoader(
-                        val_subset, 
-                        batch_size=self.batch_size, 
-                        shuffle=False, 
-                        num_workers=0
-                    )
-                    print(f"   ✅ データ再分割完了: 訓練 {len(train_subset)}, 検証 {len(val_subset)}")
-                else:
-                    print("   ⚠️ サンプル数が1件のため、同じデータを訓練・検証両方に使用します")
-                    # 1サンプルの場合は、同じデータを訓練・検証両方に使用
-                    
-                    # 同じデータセットを2つのサブセットに分割（実際は同じデータ）
-                    train_subset, val_subset = torch.utils.data.random_split(
-                        original_dataset, [1, 0]  # 1件を訓練、0件を検証
-                    )
-                    
-                    # 検証データも同じデータセットを使用
-                    val_subset = original_dataset
-                    
-                    # Subsetオブジェクトに必要な属性を追加
-                    train_subset.KEY_CHARS = original_dataset.KEY_CHARS
-                    train_subset.key_to_index = original_dataset.key_to_index
-                    train_subset.index_to_key = original_dataset.index_to_key
-                    train_subset.get_class_weights = original_dataset.get_class_weights
-                    
-                    val_subset.KEY_CHARS = original_dataset.KEY_CHARS
-                    val_subset.key_to_index = original_dataset.key_to_index
-                    val_subset.index_to_key = original_dataset.index_to_key
-                    val_subset.get_class_weights = original_dataset.get_class_weights
-                    
-                    # 新しいデータローダーを作成
-                    self.train_loader = DataLoader(
-                        train_subset, 
-                        batch_size=1,  # 1サンプルのためバッチサイズ1
-                        shuffle=True, 
-                        num_workers=0
-                    )
-                    self.val_loader = DataLoader(
-                        val_subset, 
-                        batch_size=1,  # 1サンプルのためバッチサイズ1
-                        shuffle=False, 
-                        num_workers=0
-                    )
-                    print(f"   ✅ 1サンプル用データ設定完了: 訓練 {len(train_subset)}, 検証 {len(val_subset)}")
-                    print(f"   ⚠️ 注意: 過学習の可能性が高いため、実用にはより多くのデータが必要です")
+            if len(self.test_loader) == 0:
+                print("⚠️ 警告: テストデータが0件です。最終評価ができません")
             
-            # データセットの情報を取得（元のデータセットを参照）
-            original_dataset = self.train_loader.dataset.dataset if hasattr(self.train_loader.dataset, 'dataset') else self.train_loader.dataset
+            # データセットの情報を取得
             train_dataset = self.train_loader.dataset
             val_dataset = self.val_loader.dataset
+            test_dataset = self.test_loader.dataset
             
             print(f"✅ データセット設定完了")
             print(f"   訓練データ: {len(train_dataset)} サンプル")
             print(f"   検証データ: {len(val_dataset)} サンプル")
-            print(f"   特徴量次元: {original_dataset.feature_dim}")
-            print(f"   時系列長: {original_dataset.sequence_length}")
-            print(f"   クラス数: {original_dataset.num_classes}")
+            print(f"   テストデータ: {len(test_dataset)} サンプル")
+            print(f"   特徴量次元: {train_dataset.feature_dim}")
+            print(f"   時系列長: {train_dataset.sequence_length}")
+            print(f"   クラス数: {train_dataset.num_classes}")
             
             return True
             
@@ -214,14 +140,14 @@ class IntentModelTrainer:
         print("🤖 モデルの設定中...")
         
         try:
-            # データセットから情報を取得（元のデータセットを参照）
-            original_dataset = self.train_loader.dataset.dataset if hasattr(self.train_loader.dataset, 'dataset') else self.train_loader.dataset
+            # データセットから情報を取得
+            train_dataset = self.train_loader.dataset
             
             # モデルの初期化
             self.model = BasicHandLSTM(
-                input_size=original_dataset.feature_dim,
+                input_size=train_dataset.feature_dim,
                 hidden_size=128,
-                num_classes=original_dataset.num_classes
+                num_classes=train_dataset.num_classes
             ).to(self.device)
             
             # モデルパラメータ数の計算
@@ -233,7 +159,7 @@ class IntentModelTrainer:
             print(f"   学習可能パラメータ数: {trainable_params:,}")
             
             # 損失関数（クラス重み対応）
-            class_weights = original_dataset.get_class_weights()
+            class_weights = train_dataset.get_class_weights()
             self.criterion = nn.CrossEntropyLoss(weight=class_weights.to(self.device))
             print(f"✅ クラス重みを使用した損失関数を設定しました")
             
@@ -441,8 +367,11 @@ class IntentModelTrainer:
             print(f"   最終検証精度: {val_acc:.1f}%")
             print(f"   最終検証Top-3精度: {val_top3_acc:.1f}%")
             
+            # テストデータでの最終評価
+            test_results = self.evaluate_test_data()
+            
             # 最終結果の保存
-            self.save_final_results(predictions, labels)
+            self.save_final_results(predictions, labels, test_results)
             
             return True
             
@@ -455,11 +384,72 @@ class IntentModelTrainer:
         finally:
             self.cleanup()
     
+    def evaluate_test_data(self):
+        """テストデータでの最終評価"""
+        print("\n🧪 テストデータでの最終評価を実行中...")
+        
+        if len(self.test_loader) == 0:
+            print("⚠️ テストデータが存在しません。スキップします。")
+            return None
+        
+        self.model.eval()
+        test_loss = 0.0
+        correct = 0
+        top3_correct = 0
+        total = 0
+        all_predictions = []
+        all_labels = []
+        
+        with torch.no_grad():
+            for batch_idx, (data, target) in enumerate(self.test_loader):
+                if torch.cuda.is_available():
+                    data, target = data.cuda(), target.cuda()
+                
+                output = self.model(data)
+                loss = self.criterion(output, target)
+                test_loss += loss.item()
+                
+                # 予測の計算
+                pred = output.argmax(dim=1, keepdim=True)
+                correct += pred.eq(target.view_as(pred)).sum().item()
+                
+                # Top-3精度の計算
+                _, top3_pred = output.topk(3, dim=1)
+                top3_correct += top3_pred.eq(target.view(-1, 1)).sum().item()
+                
+                total += target.size(0)
+                
+                # 予測とラベルを保存
+                all_predictions.extend(pred.cpu().numpy().flatten())
+                all_labels.extend(target.cpu().numpy())
+        
+        # 平均損失と精度を計算
+        avg_test_loss = test_loss / len(self.test_loader)
+        test_accuracy = 100. * correct / total
+        test_top3_accuracy = 100. * top3_correct / total
+        
+        print(f"📊 テストデータ評価結果:")
+        print(f"   テスト損失: {avg_test_loss:.4f}")
+        print(f"   テスト精度: {test_accuracy:.2f}%")
+        print(f"   Top-3精度: {test_top3_accuracy:.2f}%")
+        
+        # 結果を保存
+        test_results = {
+            'test_loss': avg_test_loss,
+            'test_accuracy': test_accuracy,
+            'test_top3_accuracy': test_top3_accuracy,
+            'predictions': all_predictions,
+            'labels': all_labels
+        }
+        
+        return test_results
+    
     def save_model(self, filename: str, epoch: int, val_loss: float, val_acc: float):
         """モデルの保存"""
         filepath = os.path.join(self.model_save_path, filename)
         # ラベルマップ（インデックスとキーの対応）
-        label_map = list(self.train_loader.dataset.KEY_CHARS)
+        train_dataset = self.train_loader.dataset
+        label_map = list(train_dataset.KEY_CHARS)
         # 併せてJSONとしても保存（可搬性向上）
         label_map_file = os.path.join(self.model_save_path, 'label_map.json')
         try:
@@ -482,10 +472,10 @@ class IntentModelTrainer:
             'train_top3_accuracies': self.train_top3_accuracies,
             'val_top3_accuracies': self.val_top3_accuracies,
             'model_config': {
-                'input_size': self._get_original_dataset().feature_dim,
+                'input_size': train_dataset.feature_dim,
                 'hidden_size': 128,
-                'num_classes': self._get_original_dataset().num_classes,
-                'sequence_length': self._get_original_dataset().sequence_length
+                'num_classes': train_dataset.num_classes,
+                'sequence_length': train_dataset.sequence_length
             },
             'training_config': {
                 'epochs': self.epochs,
@@ -496,17 +486,16 @@ class IntentModelTrainer:
             'label_map': label_map
         }, filepath)
     
-    def save_final_results(self, predictions: list, labels: list):
+    def save_final_results(self, predictions: list, labels: list, test_results: dict = None):
         """最終結果の保存"""
         print("💾 最終結果を保存中...")
         
         # 分類レポートの生成
-        dataset = self.val_loader.dataset
-        original_dataset = self._get_original_dataset()
+        val_dataset = self.val_loader.dataset
         
         # 実際に使用されたクラスを特定（予測または正解に登場したクラスのみ）
         unique_labels = sorted(list(set(labels + predictions)))
-        target_names = [original_dataset.index_to_key(i) for i in unique_labels]
+        target_names = [val_dataset.index_to_key(i) for i in unique_labels]
 
         # 実データから混同行列を計算
         cm = confusion_matrix(labels, predictions, labels=unique_labels)
@@ -522,6 +511,7 @@ class IntentModelTrainer:
                 'best_val_loss': self.best_val_loss,
                 'total_epochs': len(self.train_losses)
             },
+            'test_metrics': test_results if test_results else None,
             'confusion_matrix': cm.tolist(),
             'classification_report': report,
             'learning_history': {
@@ -547,12 +537,6 @@ class IntentModelTrainer:
         
         print(f"✅ 最終結果を保存しました: {results_file}")
     
-    def _get_original_dataset(self):
-        """元のデータセットを取得（Subsetオブジェクトの場合は元のデータセットを返す）"""
-        dataset = self.train_loader.dataset
-        if hasattr(dataset, 'dataset'):
-            return dataset.dataset
-        return dataset
     
     def plot_confusion_matrix(self, cm: np.ndarray, target_names: list):
         """混同行列の可視化"""

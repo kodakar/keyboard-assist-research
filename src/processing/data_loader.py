@@ -31,7 +31,8 @@ class KeyboardIntentDataset(Dataset):
     )
     
     def __init__(self, data_dir: str, sequence_length: int = 60, 
-                 train: bool = True, train_ratio: float = 0.8,
+                 split_mode: str = 'train', train_ratio: float = 0.6, 
+                 val_ratio: float = 0.2, test_ratio: float = 0.2,
                  augment: bool = False, noise_std: float = 0.01,
                  random_seed: int = 42):
         """
@@ -40,18 +41,26 @@ class KeyboardIntentDataset(Dataset):
         Args:
             data_dir: データディレクトリのパス
             sequence_length: 時系列データの長さ（フレーム数）
-            train: 訓練データかどうか
+            split_mode: データ分割モード ('train', 'val', 'test')
             train_ratio: 訓練データの割合
+            val_ratio: 検証データの割合
+            test_ratio: テストデータの割合
             augment: データ拡張を行うかどうか
             noise_std: ガウシアンノイズの標準偏差
             random_seed: 乱数シード
         """
         self.data_dir = data_dir
         self.sequence_length = sequence_length
-        self.train = train
+        self.split_mode = split_mode
         self.train_ratio = train_ratio
+        self.val_ratio = val_ratio
+        self.test_ratio = test_ratio
         self.augment = augment
         self.noise_std = noise_std
+        self.random_seed = random_seed
+        
+        # ★ 追加: train属性を設定
+        self.train = (split_mode == 'train')
         
         # 乱数シードを設定
         random.seed(random_seed)
@@ -61,8 +70,8 @@ class KeyboardIntentDataset(Dataset):
         # データファイルの読み込み
         self.samples = self._load_data_files()
         
-        # 訓練/検証の分割
-        self.samples = self._split_train_val()
+        # 訓練/検証/テストの分割
+        self.samples = self._split_train_val_test()
         
         # 特徴量の次元数（固定）
         self.feature_dim = 18
@@ -79,7 +88,7 @@ class KeyboardIntentDataset(Dataset):
         print(f"   特徴量次元: {self.feature_dim}")
         print(f"   時系列長: {sequence_length}")
         print(f"   クラス数: {self.num_classes}")
-        print(f"   モード: {'訓練' if train else '検証'}")
+        print(f"   モード: {self.split_mode}")
         print(f"   データ拡張: {'有効' if augment else '無効'}")
     
     def _load_data_files(self) -> List[Dict]:
@@ -158,8 +167,8 @@ class KeyboardIntentDataset(Dataset):
         print(f"✅ サンプル検証成功")
         return True
     
-    def _split_train_val(self) -> List[Dict]:
-        """訓練/検証データの分割"""
+    def _split_train_val_test(self) -> List[Dict]:
+        """訓練/検証/テストデータの分割"""
         if len(self.samples) == 0:
             return []
         
@@ -171,55 +180,94 @@ class KeyboardIntentDataset(Dataset):
                 user_groups[user_id] = []
             user_groups[user_id].append(sample)
         
-        # 各ユーザーごとに訓練/検証分割
+        # 各ユーザーごとに訓練/検証/テスト分割
         train_samples = []
         val_samples = []
+        test_samples = []
         
         for user_id, user_samples in user_groups.items():
-            if len(user_samples) < 2:
+            if len(user_samples) < 3:
                 # サンプルが少ない場合は全件を訓練データに
                 train_samples.extend(user_samples)
-                print(f"   📝 ユーザー {user_id}: サンプル数 {len(user_samples)} < 2 のため全件を訓練データに")
+                print(f"   📝 ユーザー {user_id}: サンプル数 {len(user_samples)} < 3 のため全件を訓練データに")
             else:
-                # 訓練/検証分割（クラス数が少ない場合はstratifyを無効化）
+                # 訓練/検証/テスト分割
                 try:
-                    user_train, user_val = train_test_split(
+                    # まず訓練データと残り（検証+テスト）に分割
+                    train_size = self.train_ratio
+                    val_test_size = self.val_ratio + self.test_ratio
+                    
+                    user_train, user_val_test = train_test_split(
                         user_samples, 
-                        train_size=self.train_ratio, 
+                        train_size=train_size, 
                         random_state=42,
                         stratify=[s.get('target_char', '').lower() for s in user_samples]
                     )
+                    
+                    # 残りを検証とテストに分割
+                    val_size = self.val_ratio / val_test_size  # 検証データの比率を調整
+                    user_val, user_test = train_test_split(
+                        user_val_test,
+                        train_size=val_size,
+                        random_state=42,
+                        stratify=[s.get('target_char', '').lower() for s in user_val_test]
+                    )
+                    
                 except ValueError as e:
                     # stratifyでエラーが発生した場合（クラス数が少ない場合）
                     print(f"   ⚠️ stratify分割でエラー: {e}")
                     print(f"   📝 通常分割を使用します")
-                    user_train, user_val = train_test_split(
+                    
+                    # 通常分割で3分割
+                    train_size = self.train_ratio
+                    val_test_size = self.val_ratio + self.test_ratio
+                    
+                    user_train, user_val_test = train_test_split(
                         user_samples, 
-                        train_size=self.train_ratio, 
+                        train_size=train_size, 
                         random_state=42
                     )
+                    
+                    val_size = self.val_ratio / val_test_size
+                    user_val, user_test = train_test_split(
+                        user_val_test,
+                        train_size=val_size,
+                        random_state=42
+                    )
+                
                 train_samples.extend(user_train)
                 val_samples.extend(user_val)
-                print(f"   📝 ユーザー {user_id}: 訓練 {len(user_train)}, 検証 {len(user_val)}")
+                test_samples.extend(user_test)
+                print(f"   📝 ユーザー {user_id}: 訓練 {len(user_train)}, 検証 {len(user_val)}, テスト {len(user_test)}")
         
         # サンプル数が少ない場合の特別処理
         if len(train_samples) == 0:
             print(f"   ⚠️ 警告: 訓練データが0件です")
             return []
         
-        if len(val_samples) == 0:
-            print(f"   ⚠️ 警告: 検証データが0件です。訓練データを検証データとしても使用します")
-            # 検証データがない場合は、訓練データの一部を検証データとして使用
-            if len(train_samples) >= 2:
-                val_samples = train_samples[:1]  # 最初の1件を検証データに
-                train_samples = train_samples[1:]  # 残りを訓練データに
-                print(f"   📝 検証データを作成: 訓練 {len(train_samples)}, 検証 {len(val_samples)}")
+        # 検証データまたはテストデータが0件の場合の処理
+        if len(val_samples) == 0 and len(test_samples) == 0:
+            print(f"   ⚠️ 警告: 検証・テストデータが0件です。訓練データから分割します")
+            if len(train_samples) >= 3:
+                # 訓練データを再分割
+                val_size = int(len(train_samples) * self.val_ratio)
+                test_size = int(len(train_samples) * self.test_ratio)
+                train_size = len(train_samples) - val_size - test_size
+                
+                val_samples = train_samples[:val_size]
+                test_samples = train_samples[val_size:val_size + test_size]
+                train_samples = train_samples[val_size + test_size:]
+                print(f"   📝 データ再分割: 訓練 {len(train_samples)}, 検証 {len(val_samples)}, テスト {len(test_samples)}")
         
         # 指定されたモードに応じてサンプルを返す
-        if self.train:
+        if self.split_mode == 'train':
             return train_samples
-        else:
+        elif self.split_mode == 'val':
             return val_samples
+        elif self.split_mode == 'test':
+            return test_samples
+        else:
+            raise ValueError(f"Invalid split_mode: {self.split_mode}. Must be 'train', 'val', or 'test'")
     
     def __len__(self) -> int:
         """データセットのサイズを返す"""
@@ -397,23 +445,26 @@ class KeyboardIntentDataset(Dataset):
             'feature_dim': self.feature_dim,
             'num_classes': self.num_classes,
             'label_distribution': label_dist,
-            'mode': 'train' if self.train else 'validation',
+            'split_mode': self.split_mode,
             'augmentation': self.augment
         }
 
 
 def create_data_loaders(data_dir: str, batch_size: int = 32, 
-                       sequence_length: int = 60, train_ratio: float = 0.8,
+                       sequence_length: int = 60, train_ratio: float = 0.6,
+                       val_ratio: float = 0.2, test_ratio: float = 0.2,
                        augment: bool = True, num_workers: int = 0,
-                       random_seed: int = 42) -> Tuple[DataLoader, DataLoader]:
+                       random_seed: int = 42) -> Tuple[DataLoader, DataLoader, DataLoader]:
     """
-    データローダーを作成
+    データローダーを作成（3分割対応）
     
     Args:
         data_dir: データディレクトリのパス
         batch_size: バッチサイズ
         sequence_length: 時系列データの長さ
         train_ratio: 訓練データの割合
+        val_ratio: 検証データの割合
+        test_ratio: テストデータの割合
         augment: データ拡張を行うかどうか
         num_workers: データ読み込みのワーカー数
         random_seed: 乱数シード
@@ -421,14 +472,17 @@ def create_data_loaders(data_dir: str, batch_size: int = 32,
     Returns:
         train_loader: 訓練データローダー
         val_loader: 検証データローダー
+        test_loader: テストデータローダー
     """
     
     # 訓練データセット
     train_dataset = KeyboardIntentDataset(
         data_dir=data_dir,
         sequence_length=sequence_length,
-        train=True,
+        split_mode='train',
         train_ratio=train_ratio,
+        val_ratio=val_ratio,
+        test_ratio=test_ratio,
         augment=augment,
         random_seed=random_seed
     )
@@ -437,9 +491,23 @@ def create_data_loaders(data_dir: str, batch_size: int = 32,
     val_dataset = KeyboardIntentDataset(
         data_dir=data_dir,
         sequence_length=sequence_length,
-        train=False,
+        split_mode='val',
         train_ratio=train_ratio,
+        val_ratio=val_ratio,
+        test_ratio=test_ratio,
         augment=False,  # 検証時は拡張なし
+        random_seed=random_seed
+    )
+    
+    # テストデータセット
+    test_dataset = KeyboardIntentDataset(
+        data_dir=data_dir,
+        sequence_length=sequence_length,
+        split_mode='test',
+        train_ratio=train_ratio,
+        val_ratio=val_ratio,
+        test_ratio=test_ratio,
+        augment=False,  # テスト時は拡張なし
         random_seed=random_seed
     )
     
@@ -460,12 +528,21 @@ def create_data_loaders(data_dir: str, batch_size: int = 32,
         pin_memory=True if torch.cuda.is_available() else False
     )
     
-    print(f"✅ データローダー作成完了")
+    test_loader = DataLoader(
+        test_dataset,
+        batch_size=batch_size,
+        shuffle=False,
+        num_workers=num_workers,
+        pin_memory=True if torch.cuda.is_available() else False
+    )
+    
+    print(f"✅ データローダー作成完了（3分割）")
     print(f"   訓練データ: {len(train_dataset)} サンプル")
     print(f"   検証データ: {len(val_dataset)} サンプル")
+    print(f"   テストデータ: {len(test_dataset)} サンプル")
     print(f"   バッチサイズ: {batch_size}")
     
-    return train_loader, val_loader
+    return train_loader, val_loader, test_loader
 
 
 # 使用例

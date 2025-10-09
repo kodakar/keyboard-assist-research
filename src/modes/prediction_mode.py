@@ -161,7 +161,7 @@ class PredictionMode:
             
             # モデル設定の取得
             model_config = checkpoint.get('model_config', {})
-            input_size = model_config.get('input_size', 15)
+            input_size = model_config.get('input_size', 18)
             hidden_size = model_config.get('hidden_size', 128)
             num_classes = model_config.get('num_classes', 37)
             
