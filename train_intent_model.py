@@ -490,6 +490,10 @@ class IntentModelTrainer:
         """最終結果の保存"""
         print("💾 最終結果を保存中...")
         
+        # NumPy型をPython標準型に変換（JSONシリアライゼーション対応）
+        predictions = [int(p) for p in predictions]
+        labels = [int(l) for l in labels]
+        
         # 分類レポートの生成
         val_dataset = self.val_loader.dataset
         
@@ -502,25 +506,31 @@ class IntentModelTrainer:
         
         report = classification_report(labels, predictions, labels=unique_labels, target_names=target_names, output_dict=True, zero_division=0)
         
+        # test_resultsのNumPy型も変換
+        if test_results and 'predictions' in test_results:
+            test_results['predictions'] = [int(p) for p in test_results['predictions']]
+        if test_results and 'labels' in test_results:
+            test_results['labels'] = [int(l) for l in test_results['labels']]
+        
         # 結果の保存
         results = {
             'final_metrics': {
-                'final_val_loss': self.val_losses[-1] if self.val_losses else None,
-                'final_val_accuracy': self.val_accuracies[-1] if self.val_accuracies else None,
-                'final_val_top3_accuracy': self.val_top3_accuracies[-1] if self.val_top3_accuracies else None,
-                'best_val_loss': self.best_val_loss,
-                'total_epochs': len(self.train_losses)
+                'final_val_loss': float(self.val_losses[-1]) if self.val_losses else None,
+                'final_val_accuracy': float(self.val_accuracies[-1]) if self.val_accuracies else None,
+                'final_val_top3_accuracy': float(self.val_top3_accuracies[-1]) if self.val_top3_accuracies else None,
+                'best_val_loss': float(self.best_val_loss),
+                'total_epochs': int(len(self.train_losses))
             },
             'test_metrics': test_results if test_results else None,
             'confusion_matrix': cm.tolist(),
             'classification_report': report,
             'learning_history': {
-                'train_losses': self.train_losses,
-                'val_losses': self.val_losses,
-                'train_accuracies': self.train_accuracies,
-                'val_accuracies': self.val_accuracies,
-                'train_top3_accuracies': self.train_top3_accuracies,
-                'val_top3_accuracies': self.val_top3_accuracies
+                'train_losses': [float(loss) for loss in self.train_losses],
+                'val_losses': [float(loss) for loss in self.val_losses],
+                'train_accuracies': [float(acc) for acc in self.train_accuracies],
+                'val_accuracies': [float(acc) for acc in self.val_accuracies],
+                'train_top3_accuracies': [float(acc) for acc in self.train_top3_accuracies],
+                'val_top3_accuracies': [float(acc) for acc in self.val_top3_accuracies]
             }
         }
         

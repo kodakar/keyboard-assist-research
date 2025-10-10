@@ -70,6 +70,7 @@ class EvaluationMode:
         self.current_inputs = []
         self.start_time = None
         self.last_input_time = None
+        self.prediction_ready_time = None
         
         print(f"🎯 評価モード初期化完了")
         print(f"   モデルパス: {model_path}")
@@ -115,7 +116,32 @@ class EvaluationMode:
                     print("❌ キーボードマッピングに失敗しました")
                     return False
             else:
-                print("✅ 保存済みのキーボード設定を使用します")
+                print("\n📁 保存済みのキーボード設定ファイル (keyboard_map.json) が見つかりました。")
+                print("\n1: 保存した設定を再利用する")
+                print("2: 新しくキャリブレーションをやり直す")
+                
+                while True:
+                    try:
+                        choice = input("\nどちらにしますか？ (1/2): ").strip()
+                        
+                        if choice == "1":
+                            print("✅ 保存した設定を再利用します。")
+                            break
+                        elif choice == "2":
+                            print("🔄 新しいキャリブレーションを開始します...")
+                            if not self.keyboard_map.start_calibration(existing_camera=self.camera):
+                                print("❌ キーボードマッピングに失敗しました")
+                                return False
+                            break
+                        else:
+                            print("❌ 無効な選択です。1 または 2 を入力してください。")
+                            
+                    except KeyboardInterrupt:
+                        print("\n❌ プログラムを終了します。")
+                        return False
+                    except EOFError:
+                        print("\n❌ プログラムを終了します。")
+                        return False
             
             # 座標変換器の初期化
             self.transformer = WorkAreaTransformer(self.keyboard_map_path)
@@ -307,7 +333,12 @@ class EvaluationMode:
                 print(f"   目標テキスト: \"{target_text}\"")
                 print("   準備ができたらスペースキーを押してください...")
                 
-                # スペースキー待機
+                # スペースキー待機（キーボードトラッカーのバッファをクリア）
+                print("   キーボードトラッカーをクリア中...")
+                # バッファをクリア（既存のキー入力を無視）
+                while self.keyboard_tracker.get_key_event() is not None:
+                    pass
+                
                 while True:
                     frame = self.camera.read_frame()
                     if frame is None:
@@ -320,6 +351,10 @@ class EvaluationMode:
                     if key == 27:  # ESC
                         return False
                     elif key == 32:  # スペース
+                        print("   タスク開始！")
+                        # スペースキーをクリア（タスク開始前に）
+                        while self.keyboard_tracker.get_key_event() is not None:
+                            pass
                         break
                 
                 # タスク開始
@@ -354,6 +389,7 @@ class EvaluationMode:
         char_idx = 0
         self.start_time = time.time()
         self.last_input_time = self.start_time
+        self.prediction_ready_time = None
         
         try:
             while char_idx < len(target_text):
@@ -374,17 +410,22 @@ class EvaluationMode:
                     predictions = self.predict_intent()
                     if predictions:
                         self.current_prediction = predictions
+                        # 予測準備完了時点を記録（最初の1回のみ）
+                        if self.prediction_ready_time is None:
+                            self.prediction_ready_time = time.time()
                 
-                # キー入力チェック
+                # キー入力チェック（予測準備完了時のみ）
                 actual_input = self.keyboard_tracker.get_key_event()
-                if actual_input is not None:
+                if actual_input is not None and self.current_prediction is not None:
                     # 入力時間の計算
                     current_time = time.time()
-                    input_time = current_time - self.last_input_time
+                    if char_idx == 0 and self.prediction_ready_time is not None:
+                        # 一文字目は予測準備完了時点から計算
+                        input_time = current_time - self.prediction_ready_time
+                    else:
+                        # 二文字目以降は前回入力から計算
+                        input_time = current_time - self.last_input_time
                     self.last_input_time = current_time
-                    
-                    # 正解/不正解の判定
-                    is_correct = (actual_input.lower() == target_char.lower())
                     
                     # 予測結果の記録
                     predicted_top3 = []
@@ -393,6 +434,11 @@ class EvaluationMode:
                         for key, prob in self.current_prediction[:3]:
                             predicted_top3.append(key)
                             predicted_probs.append(prob)
+                    
+                    # 正解/不正解の判定（Top-1予測と目標文字を比較）
+                    is_correct = False
+                    if predicted_top3 and len(predicted_top3) > 0:
+                        is_correct = (predicted_top3[0].lower() == target_char.lower())
                     
                     # 入力ログを記録
                     input_log = {
@@ -406,7 +452,27 @@ class EvaluationMode:
                     }
                     
                     self.current_inputs.append(input_log)
-                    print(f"   {target_char} -> {actual_input} ({'✓' if is_correct else '✗'}) [{input_time:.2f}s]")
+                    
+                    # Top-1予測とTop-3予測結果の表示用文字列を作成
+                    top1_pred = ""
+                    top3_str = ""
+                    
+                    if predicted_top3 and len(predicted_top3) > 0:
+                        # Top-1予測（1位予測）
+                        top1_key = predicted_top3[0]
+                        top1_prob = predicted_probs[0]
+                        top1_pred = f" -> {top1_key}({top1_prob:.0f}%)"
+                        
+                        # Top-3予測結果
+                        top3_display = []
+                        for i, (key, prob) in enumerate(zip(predicted_top3, predicted_probs)):
+                            top3_display.append(f"{key}({prob:.0f}%)")
+                        top3_str = f" Top3: [{', '.join(top3_display)}]"
+                    else:
+                        top1_pred = " -> [予測なし]"
+                        top3_str = " Top3: [なし]"
+                    
+                    print(f"   {target_char}{top1_pred} ({'✓' if is_correct else '✗'}) [{input_time:.2f}s]{top3_str}")
                     
                     char_idx += 1
                 
@@ -480,8 +546,10 @@ class EvaluationMode:
         x2 = w - 20
         y2 = y1 + panel_height
         
-        # 背景
-        cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 0), -1)
+        # 半透明背景
+        overlay = frame.copy()
+        cv2.rectangle(overlay, (x1, y1), (x2, y2), (0, 0, 0), -1)
+        cv2.addWeighted(overlay, 0.3, frame, 0.7, 0, frame)
         cv2.rectangle(frame, (x1, y1), (x2, y2), (255, 255, 255), 2)
         
         # 目標テキスト
@@ -564,7 +632,11 @@ class EvaluationMode:
                     correct_inputs += 1
                 
                 # Top-3正解率の計算
-                if input_log['predicted_top3'] and len(input_log['predicted_top3']) > 0:
+                # Top-1正解の場合は自動的にTop-3正解でもある
+                if input_log['is_correct']:
+                    top3_correct += 1
+                elif input_log['predicted_top3'] and len(input_log['predicted_top3']) > 0:
+                    # Top-1不正解だが、Top-3予測に正解が含まれる場合
                     target_char = input_log['target_char'].lower()
                     if target_char in [pred.lower() for pred in input_log['predicted_top3']]:
                         top3_correct += 1
@@ -574,8 +646,8 @@ class EvaluationMode:
         top3_accuracy = (top3_correct / total_inputs * 100) if total_inputs > 0 else 0.0
         avg_input_time = (total_input_time / total_inputs) if total_inputs > 0 else 0.0
         
-        # WPMの計算（英語では平均5文字 = 1単語として計算）
-        wpm = (60 / avg_input_time / 5) if avg_input_time > 0 else 0.0
+        # WPMの計算（文字/分として計算）
+        wpm = (60 / avg_input_time) if avg_input_time > 0 else 0.0
         
         error_rate = 100.0 - top1_accuracy
         

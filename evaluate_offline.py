@@ -24,7 +24,7 @@ from torch.utils.data import DataLoader
 
 
 def evaluate_on_testset(model_path: str, data_dir: str, 
-                       output_dir: str = 'evaluation_results/offline'):
+                       output_dir: str = None):
     """
     テストセットでのオフライン評価
     
@@ -44,6 +44,11 @@ def evaluate_on_testset(model_path: str, data_dir: str,
     4. 結果をJSON・PNGで保存
     5. サマリーをコンソール表示
     """
+    
+    # モデル名からディレクトリ名を生成
+    if output_dir is None:
+        model_dir = os.path.basename(os.path.dirname(model_path))
+        output_dir = f'evaluation_results/offline/{model_dir}'
     
     print("🚀 オフライン評価を開始します")
     print(f"   モデル: {model_path}")
@@ -332,8 +337,8 @@ def main():
                         help='モデルパス（.pthファイル）')
     parser.add_argument('--data-dir', type=str, default='data/training',
                         help='データディレクトリ')
-    parser.add_argument('--output-dir', type=str, default='evaluation_results/offline',
-                        help='結果保存先')
+    parser.add_argument('--output-dir', type=str, default=None,
+                        help='結果保存先（指定しない場合はモデル名で自動生成）')
     
     args = parser.parse_args()
     

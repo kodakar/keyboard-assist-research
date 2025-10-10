@@ -34,6 +34,9 @@ label_map.json
 confusion_matrix.png
 learning_curves.png
 
+# 評価結果
+evaluation_results/
+
 # データ収集の一時ファイル
 data/training/*/session_*/sample_*.json
 data/training/*/session_*/session_metadata.json
@@ -41,3 +44,5 @@ data/training/*/session_*/session_metadata.json
 # ただし、データ構造の例は保持
 !data/training/README.md
 !data/training/.gitkeep
+
+/aaa
