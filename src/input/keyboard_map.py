@@ -28,7 +28,7 @@ class KeyboardMap:
         self.calibration_helper = CalibrationHelper()
         self.simple_mapper = SimpleKeyboardMapper()
         
-        load_dotenv()
+        # load_dotenv()
         self.gemini_available = self._setup_gemini()
         self.target_keys = self._get_target_keys()
         

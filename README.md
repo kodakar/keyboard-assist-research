@@ -190,7 +190,7 @@ python train_intent_model.py --data-dir data/training/user_001 --epochs 200 --le
 - モデルファイル：`models/intent_model_YYYYMMDD_HHMMSS/`
 - 学習曲線：`learning_curves.png`
 - 混同行列：`confusion_matrix.png`
-- 結果 JSON：`training_results.json`
+- 結果 JSON：`training_results.json`（検証・テスト結果を含む）
 - TensorBoard ログ：`runs/intent_training_YYYYMMDD_HHMMSS/`
 
 ### 予測モード（prediction_mode.py）
@@ -215,6 +215,144 @@ python src/modes/prediction_mode.py --model models/intent_model_YYYYMMDD_HHMMSS/
   - Predict: 押した瞬間の Top-3 予測をスナップショット表示
 - 学習済みモデルの読み込み（--model で選択可能）
 - デバッグ表示・評価モードは削除し、UI を簡素化
+
+### 評価モード（evaluation_mode.py）
+
+被験者によるリアルタイム評価実験を実施し、システムの実用性能を測定します。
+
+```bash
+# 基本的な評価実験
+python src/modes/evaluation_mode.py --model models/intent_model_YYYYMMDD_HHMMSS/best_model.pth --participant P001 --texts "hello world" "the quick brown fox"
+
+# 複数のタスクで評価
+python src/modes/evaluation_mode.py --model models/intent_model_YYYYMMDD_HHMMSS/best_model.pth --participant P002 --texts "apple banana cherry" "keyboard assist research" "python machine learning"
+```
+
+**主な機能：**
+
+- **構造化された評価**: 指定されたテキストを1文字ずつ入力
+- **詳細なログ記録**: 目標文字、予測Top-3、実際の入力、正解/不正解、入力時間を記録
+- **自動指標計算**: Top-1精度、Top-3精度、平均入力時間、WPM、エラー率を自動計算
+- **結果保存**: JSON形式で詳細な評価結果を保存
+- **進捗表示**: リアルタイムで進捗状況と予測結果を表示
+
+**評価指標：**
+
+- **Top-1精度**: 1位予測の正解率
+- **Top-3精度**: Top-3予測に正解が含まれる割合
+- **平均入力時間**: 1文字あたりの平均入力時間（秒）
+- **WPM**: Words Per Minute（英語では5文字=1単語として計算）
+- **エラー率**: 不正解の割合
+
+**保存されるファイル：**
+
+```
+evaluation_results/
+├── P001/
+│   └── evaluation_20241002_143022.json
+└── P002/
+    └── evaluation_20241002_150315.json
+```
+
+**評価結果の例：**
+
+```json
+{
+  "participant_id": "P001",
+  "timestamp": "2024-10-02T14:30:22.123456",
+  "model_path": "models/intent_model_20241002/best_model.pth",
+  "evaluation_log": [
+    {
+      "task_idx": 0,
+      "target_text": "hello world",
+      "inputs": [
+        {
+          "target_char": "h",
+          "predicted_top3": ["h", "g", "y"],
+          "predicted_probs": [85.3, 8.2, 3.1],
+          "actual_input": "h",
+          "is_correct": true,
+          "input_time": 2.34,
+          "timestamp": "2024-10-02T14:30:24.456789"
+        }
+      ]
+    }
+  ],
+  "metrics": {
+    "top1_accuracy": 78.5,
+    "top3_accuracy": 91.2,
+    "avg_input_time": 2.45,
+    "wpm": 4.9,
+    "error_rate": 21.5,
+    "total_inputs": 120,
+    "correct_inputs": 94
+  }
+}
+```
+
+### オフライン評価（evaluate_offline.py）
+
+学習済みモデルをテストセット（学習時未使用）で評価し、真の性能を測定します。
+
+```bash
+# 基本的なオフライン評価
+python evaluate_offline.py --model models/intent_model_YYYYMMDD_HHMMSS/best_model.pth
+
+# カスタム設定
+python evaluate_offline.py \
+  --model models/intent_model_YYYYMMDD_HHMMSS/best_model.pth \
+  --data-dir data/training \
+  --output-dir evaluation_results/test_20241002
+```
+
+**主な機能：**
+
+- **テストセット専用評価**: 学習時に使用されなかったテストデータで評価
+- **詳細な精度分析**: Top-1精度、Top-3精度、クラス別精度を計算
+- **可視化**: 混同行列とクラス別精度のグラフを自動生成
+- **結果保存**: JSON形式で詳細結果、PNG形式で可視化を保存
+
+**評価指標：**
+
+- **Top-1精度**: 1位予測の正解率
+- **Top-3精度**: Top-3予測に正解が含まれる割合
+- **クラス別精度**: 各キー（a-z, 0-9, スペース）の個別精度
+- **混同行列**: 予測結果の詳細な分析
+
+**保存されるファイル：**
+
+```
+evaluation_results/offline/
+├── offline_evaluation_20241002_143022.json  # 詳細結果
+├── confusion_matrix.png                     # 混同行列
+└── per_class_accuracy.png                   # クラス別精度
+```
+
+**評価結果の例：**
+
+```
+📊 オフライン評価結果（テストセット）
+========================================
+テストサンプル数: 245
+Top-1精度:        78.5%
+Top-3精度:        91.2%
+========================================
+
+🏆 クラス別精度（上位5位）:
+   1. a: 95.2%
+   2. e: 92.8%
+   3. i: 89.1%
+   4. o: 87.3%
+   5. u: 85.6%
+
+📉 クラス別精度（下位5位）:
+   41. z: 45.2%
+   42. x: 42.1%
+   43. q: 38.9%
+   44. j: 35.6%
+   45. 9: 32.1%
+========================================
+```
 
 ## 🔧 トラブルシューティング
 
@@ -362,6 +500,19 @@ keyboard-assist-research/
 
 ## 📊 データ構造
 
+### データ分割方法
+
+このシステムでは**3分割**を採用して機械学習のベストプラクティスに従っています：
+
+- **訓練データ（60%）**: モデルの学習に使用
+- **検証データ（20%）**: ハイパーパラメータ調整とEarly Stoppingに使用
+- **テストデータ（20%）**: 最終的な汎化性能評価に使用（一度も触れない）
+
+#### 分割の特徴
+- **ユーザー別分割**: 各ユーザーのデータを個別に分割（データリーク防止）
+- **層化分割**: 各キーの分布を訓練・検証・テストで均等に保持
+- **再現性**: 固定シード（random_state=42）で同じ分割結果を保証
+
 ### 収集されるデータ
 
 - **軌跡データ**: 60 フレーム分の手の動き
@@ -398,9 +549,10 @@ keyboard-assist-research/
 
 ### 3. 過学習の防止
 
-- **検証データ**: 訓練データの 20%を検証用に分割
+- **3分割データ**: 訓練データ 60%、検証データ 20%、テストデータ 20%に分割
 - **Early Stopping**: 検証損失が 5 エポック改善しない場合に停止
 - **データ拡張**: ガウシアンノイズ、時間軸の伸縮
+- **真の汎化性能**: テストデータで最終評価（ハイパーパラメータ調整に使用しない）
 
 ## 🔍 デバッグ方法
 
