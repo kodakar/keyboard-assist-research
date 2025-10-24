@@ -9,8 +9,14 @@ import json
 import os
 import numpy as np
 import cv2
+import sys
 from typing import List, Dict, Tuple, Optional
 from dataclasses import dataclass
+
+# プロジェクトルートをパスに追加
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
+
+from config.feature_config import get_feature_dim
 
 
 @dataclass
@@ -42,7 +48,7 @@ class WorkAreaTransformer:
         self.keyboard_map = None
         self.homography_matrix = None
         self.work_area_corners = None
-        self.feature_dim = 15  # 15次元特徴量
+        self.feature_dim = get_feature_dim()  # 設定ファイルから取得
         
         # キーボードマップを読み込み
         self._load_keyboard_map()

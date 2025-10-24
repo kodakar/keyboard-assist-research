@@ -14,7 +14,14 @@ from collections import Counter
 import random
 from sklearn.model_selection import train_test_split
 import warnings
+import sys
+import os
+
+# プロジェクトルートをパスに追加
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
+
 from .feature_extractor import FeatureExtractor
+from config.feature_config import get_feature_dim, get_sequence_length, get_num_classes
 
 
 class KeyboardIntentDataset(Dataset):
@@ -30,7 +37,7 @@ class KeyboardIntentDataset(Dataset):
         '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', ' '
     )
     
-    def __init__(self, data_dir: str, sequence_length: int = 60, 
+    def __init__(self, data_dir: str, sequence_length: int = None, 
                  split_mode: str = 'train', train_ratio: float = 0.6, 
                  val_ratio: float = 0.2, test_ratio: float = 0.2,
                  augment: bool = False, noise_std: float = 0.01,
@@ -50,7 +57,8 @@ class KeyboardIntentDataset(Dataset):
             random_seed: 乱数シード
         """
         self.data_dir = data_dir
-        self.sequence_length = sequence_length
+        # 設定ファイルから値を取得（引数で上書き可能）
+        self.sequence_length = sequence_length or get_sequence_length()
         self.split_mode = split_mode
         self.train_ratio = train_ratio
         self.val_ratio = val_ratio
@@ -73,14 +81,14 @@ class KeyboardIntentDataset(Dataset):
         # 訓練/検証/テストの分割
         self.samples = self._split_train_val_test()
         
-        # 特徴量の次元数（固定）
-        self.feature_dim = 18
+        # 特徴量の次元数（設定ファイルから取得）
+        self.feature_dim = get_feature_dim()
         
         # 特徴量抽出器のインスタンス化
         self.feature_extractor = FeatureExtractor(sequence_length=self.sequence_length)
         
-        # クラス数
-        self.num_classes = len(self.KEY_CHARS)
+        # クラス数（設定ファイルから取得）
+        self.num_classes = get_num_classes()
         
         print(f"✅ データセット初期化完了")
         print(f"   データディレクトリ: {data_dir}")
@@ -451,7 +459,7 @@ class KeyboardIntentDataset(Dataset):
 
 
 def create_data_loaders(data_dir: str, batch_size: int = 32, 
-                       sequence_length: int = 60, train_ratio: float = 0.6,
+                       sequence_length: int = None, train_ratio: float = 0.6,
                        val_ratio: float = 0.2, test_ratio: float = 0.2,
                        augment: bool = True, num_workers: int = 0,
                        random_seed: int = 42) -> Tuple[DataLoader, DataLoader, DataLoader]:

@@ -1,19 +1,27 @@
 """
 共通特徴量抽出モジュール
-学習・推論で同一の前処理（18次元×時系列）を使用するためのユーティリティ
+学習・推論で同一の前処理（30次元×時系列）を使用するためのユーティリティ
 """
 
 from typing import Dict, List
 import numpy as np
+import sys
+import os
+
+# プロジェクトルートをパスに追加
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
+
+from config.feature_config import get_feature_dim, get_fps, get_sequence_length, get_normalization_range, get_new_feature_range, get_window_size
 
 
 class FeatureExtractor:
     """キーボード意図推定用の共通特徴量抽出器"""
 
-    def __init__(self, sequence_length: int = 60, fps: float = 30.0):
-        self.sequence_length = sequence_length
-        self.feature_dim = 18  # 2 + 6 + 3 + 4 + 3 (新規追加)
-        self.fps = fps
+    def __init__(self, sequence_length: int = None, fps: float = None):
+        # 設定ファイルから値を取得（引数で上書き可能）
+        self.sequence_length = sequence_length or get_sequence_length()
+        self.feature_dim = get_feature_dim()  # 設定ファイルから取得
+        self.fps = fps or get_fps()  # 設定ファイルから取得
 
     def extract_from_trajectory(self, trajectory_data: List[Dict]) -> np.ndarray:
         """
@@ -50,6 +58,15 @@ class FeatureExtractor:
             if i >= 2:
                 acc_x[i] = (idx_x[i] - 2*idx_x[i-1] + idx_x[i-2]) * (self.fps ** 2)
                 acc_y[i] = (idx_y[i] - 2*idx_y[i-1] + idx_y[i-2]) * (self.fps ** 2)
+
+        # 累積距離を事前計算（最適化）
+        cumulative_lengths = np.zeros(min(self.sequence_length, len(trajectory_data)), dtype=np.float32)
+        for i in range(1, min(self.sequence_length, len(trajectory_data))):
+            if i < len(idx_x) and i < len(idx_y):
+                dx = idx_x[i] - idx_x[i-1]
+                dy = idx_y[i] - idx_y[i-1]
+                segment_length = np.sqrt(dx**2 + dy**2)
+                cumulative_lengths[i] = cumulative_lengths[i-1] + segment_length
 
         # 各フレームの特徴量を構築
         for i in range(min(self.sequence_length, len(trajectory_data))):
@@ -92,45 +109,208 @@ class FeatureExtractor:
                 vxa, vya, axa, aya = 0.0, 0.0, 0.0, 0.0
 
             # 新規追加: 3つの新しい特徴量
-            # 振幅（x方向）: 過去10フレーム分のx座標の標準偏差
+            # 振幅（x方向）: 過去window_sizeフレーム分のx座標の標準偏差
             amplitude_x = 0.0
-            start_idx = max(0, i-9)  # 過去10フレーム分の開始インデックス
+            window_size = get_window_size()
+            start_idx = max(0, i - (window_size - 1))  # 過去window_sizeフレーム分の開始インデックス
             if i > 0:  # 過去のフレームがある場合
-                past_x = idx_x[start_idx:i]  # i-9からi-1まで（現在フレームは含まない）
+                past_x = idx_x[start_idx:i]  # 過去window_sizeフレーム（現在フレームは含まない）
                 amplitude_x = np.std(past_x)
             
-            # 振幅（y方向）: 過去10フレーム分のy座標の標準偏差
+            # 振幅（y方向）: 過去window_sizeフレーム分のy座標の標準偏差
             amplitude_y = 0.0
             if i > 0:  # 過去のフレームがある場合
-                past_y = idx_y[start_idx:i]  # i-9からi-1まで（現在フレームは含まない）
+                past_y = idx_y[start_idx:i]  # 過去window_sizeフレーム（現在フレームは含まない）
                 amplitude_y = np.std(past_y)
             
-            # 方向転換の頻度: 過去10フレーム分のx方向速度の符号変化回数を正規化
+            # 方向転換の頻度: 過去window_sizeフレーム分のx方向速度の符号変化回数を正規化
             direction_change_freq = 0.0
             if i > 0:  # 過去のフレームがある場合
-                past_vel_x = vel_x[start_idx:i]  # i-9からi-1まで（現在フレームは含まない）
+                past_vel_x = vel_x[start_idx:i]  # 過去window_sizeフレーム（現在フレームは含まない）
                 direction_change_freq = self._calculate_direction_change_frequency(past_vel_x)
 
+            # 30次元特徴量の実装
+            # 新規追加特徴量の計算
+            new_features = self._calculate_new_features(
+                i, trajectory_data, idx_x, idx_y, vel_x, vel_y, acc_x, acc_y, 
+                finger_x, finger_y, nearest_keys, cumulative_lengths
+            )
+            
             features[i] = np.concatenate([
-                np.array([finger_x, finger_y], dtype=np.float32),
-                rel,
-                dists,
-                np.array([vxa, vya, axa, aya], dtype=np.float32),
-                np.array([amplitude_x, amplitude_y, direction_change_freq], dtype=np.float32)
+                np.array([finger_x, finger_y], dtype=np.float32),  # 2次元: 指の座標
+                rel,  # 6次元: 最近傍3キーへの相対座標
+                dists,  # 3次元: 最近傍3キーへの距離
+                np.array([vxa, vya, axa, aya], dtype=np.float32),  # 4次元: 速度・加速度
+                np.array([amplitude_x, amplitude_y, direction_change_freq], dtype=np.float32),  # 3次元: 既存特徴量
+                new_features  # 12次元: 新規特徴量
             ])
 
-        # 正規化/クリップ
-        features[:, :2] = np.clip(features[:, :2], 0.0, 1.0)  # 指の座標
-        features[:, 2:8] = np.clip(features[:, 2:8], -5.0, 5.0)  # 相対座標
-        features[:, 8:11] = np.clip(features[:, 8:11], 0.0, 10.0)  # 距離
-        features[:, 11:15] = np.clip(features[:, 11:15], -5.0, 5.0)  # 速度・加速度
-        features[:, 15:18] = np.clip(features[:, 15:18], 0.0, 1.0)  # 新規特徴量（振幅・方向転換頻度）
+        # 正規化/クリップ（設定ファイルから取得）
+        finger_coords_range = get_normalization_range('finger_coords')
+        relative_coords_range = get_normalization_range('relative_coords')
+        distances_range = get_normalization_range('distances')
+        velocity_acceleration_range = get_normalization_range('velocity_acceleration')
+        amplitude_direction_range = get_normalization_range('amplitude_direction')
+        new_features_range = get_normalization_range('new_features')
+        
+        features[:, :2] = np.clip(features[:, :2], *finger_coords_range)  # 指の座標
+        features[:, 2:8] = np.clip(features[:, 2:8], *relative_coords_range)  # 相対座標
+        features[:, 8:11] = np.clip(features[:, 8:11], *distances_range)  # 距離
+        features[:, 11:15] = np.clip(features[:, 11:15], *velocity_acceleration_range)  # 速度・加速度
+        features[:, 15:18] = np.clip(features[:, 15:18], *amplitude_direction_range)  # 既存特徴量（振幅・方向転換頻度）
+        # 新規特徴量の個別クリップ（設定ファイルから範囲を取得）
+        for j in range(18, 30):  # 18-29番目の特徴量
+            clip_range = get_new_feature_range(j - 18)  # インデックス0-11に対応
+            features[:, j] = np.clip(features[:, j], *clip_range)
 
         # 出力形状の保証
         assert features.shape == (self.sequence_length, self.feature_dim), \
             f"特徴量の形状が不正: {features.shape}, 期待: ({self.sequence_length}, {self.feature_dim})"
 
         return features
+
+    def _calculate_new_features(self, i: int, trajectory_data: List[Dict], idx_x: List[float], idx_y: List[float], 
+                               vel_x: np.ndarray, vel_y: np.ndarray, acc_x: np.ndarray, acc_y: np.ndarray,
+                               finger_x: float, finger_y: float, nearest_keys: List[Dict], cumulative_lengths: np.ndarray) -> np.ndarray:
+        """
+        新規追加特徴量（12次元）を計算
+        
+        Returns:
+            new_features: 12次元の新規特徴量配列
+        """
+        # 1. elapsed_time: 軌跡開始からの経過時間（正規化）
+        elapsed_time = i / self.sequence_length if self.sequence_length > 0 else 0.0
+        
+        # 2. target_angle: 最近傍キーへの角度
+        target_angle = 0.0
+        if nearest_keys and len(nearest_keys) > 0:
+            key_info = nearest_keys[0]
+            if isinstance(key_info, dict):
+                rel_x = key_info.get('relative_x', 0.0)
+                rel_y = key_info.get('relative_y', 0.0)
+                target_angle = np.arctan2(rel_y, rel_x)
+        
+        # 3. velocity_angle: 速度ベクトルの角度
+        velocity_angle = 0.0
+        if i > 0 and i < len(vel_x) and i < len(vel_y):
+            if vel_x[i] != 0 or vel_y[i] != 0:
+                velocity_angle = np.arctan2(vel_y[i], vel_x[i])
+        
+        # 4. angle_to_target: 目標角度と速度角度の差
+        angle_to_target = abs(target_angle - velocity_angle)
+        angle_to_target = min(angle_to_target, np.pi)  # 0-πにクリップ
+        
+        # 5. speed: 速度の大きさ
+        speed = 0.0
+        if i > 0 and i < len(vel_x) and i < len(vel_y):
+            speed = np.sqrt(vel_x[i]**2 + vel_y[i]**2)
+        
+        # 6. acceleration_magnitude: 加速度の大きさ
+        acceleration_magnitude = 0.0
+        if i > 1 and i < len(acc_x) and i < len(acc_y):
+            acceleration_magnitude = np.sqrt(acc_x[i]**2 + acc_y[i]**2)
+        
+        # 7. jerk: ジャーク（加速度の変化率）
+        jerk = 0.0
+        if i > 2:
+            jerk_x = (acc_x[i] - acc_x[i-1]) * self.fps if i < len(acc_x) else 0.0
+            jerk_y = (acc_y[i] - acc_y[i-1]) * self.fps if i < len(acc_y) else 0.0
+            jerk = np.sqrt(jerk_x**2 + jerk_y**2)
+        
+        # 8. trajectory_length: 軌跡の累積移動距離（最適化版）
+        trajectory_length = cumulative_lengths[i] if i < len(cumulative_lengths) else 0.0
+        
+        # 9. approach_velocity: キーへの接近速度
+        approach_velocity = 0.0
+        if nearest_keys and len(nearest_keys) > 0 and i > 0:
+            key_info = nearest_keys[0]
+            if isinstance(key_info, dict):
+                current_dist = key_info.get('distance', 0.0)
+                
+                # 1フレーム前の距離を取得
+                if i-1 < len(trajectory_data):
+                    prev_frame = trajectory_data[i-1]
+                    prev_nearest = prev_frame.get('nearest_keys_relative', [])
+                    if prev_nearest and len(prev_nearest) > 0:
+                        prev_key = prev_nearest[0]
+                        if isinstance(prev_key, dict):
+                            prev_dist = prev_key.get('distance', 0.0)
+                            # 接近速度 = (前の距離 - 現在の距離) * fps
+                            # 正の値 = 近づいている、負の値 = 遠ざかっている
+                            approach_velocity = (prev_dist - current_dist) * self.fps
+        
+        # 10. trajectory_curvature: 軌跡の曲率
+        trajectory_curvature = 0.0
+        if i >= 2:
+            trajectory_curvature = self._calculate_curvature(
+                idx_x[i-2:i+1], idx_y[i-2:i+1]
+            )
+        
+        # 11. speed_std: 速度の標準偏差（過去window_sizeフレーム）
+        speed_std = 0.0
+        window_size = get_window_size()
+        start_idx = max(0, i - (window_size - 1))
+        if i > 0:
+            past_speeds = []
+            for j in range(start_idx, i):
+                if j > 0 and j < len(vel_x) and j < len(vel_y):
+                    past_speeds.append(np.sqrt(vel_x[j]**2 + vel_y[j]**2))
+            if len(past_speeds) > 1:
+                speed_std = np.std(past_speeds)
+        
+        # 12. velocity_consistency: 速度の変動係数
+        velocity_consistency = 0.0
+        if i > 0:
+            past_speeds = []
+            for j in range(start_idx, i):
+                if j > 0 and j < len(vel_x) and j < len(vel_y):
+                    past_speeds.append(np.sqrt(vel_x[j]**2 + vel_y[j]**2))
+            if len(past_speeds) > 1:
+                mean_speed = np.mean(past_speeds)
+                if mean_speed > 1e-8:
+                    velocity_consistency = np.std(past_speeds) / mean_speed
+        
+        return np.array([
+            elapsed_time, target_angle, velocity_angle, angle_to_target,
+            speed, acceleration_magnitude, jerk, trajectory_length,
+            approach_velocity, trajectory_curvature, speed_std, velocity_consistency
+        ], dtype=np.float32)
+
+    def _calculate_curvature(self, x_coords: np.ndarray, y_coords: np.ndarray) -> float:
+        """
+        3点から軌跡の曲率を計算
+        
+        Args:
+            x_coords: x座標の配列（3点）
+            y_coords: y座標の配列（3点）
+            
+        Returns:
+            curvature: 曲率（正規化済み）
+        """
+        if len(x_coords) != 3 or len(y_coords) != 3:
+            return 0.0
+        
+        # 3点の座標
+        x1, x2, x3 = x_coords
+        y1, y2, y3 = y_coords
+        
+        # ベクトル計算
+        v1x, v1y = x2 - x1, y2 - y1
+        v2x, v2y = x3 - x2, y3 - y2
+        
+        # ベクトルの大きさ
+        v1_mag = np.sqrt(v1x**2 + v1y**2)
+        v2_mag = np.sqrt(v2x**2 + v2y**2)
+        
+        if v1_mag < 1e-8 or v2_mag < 1e-8:
+            return 0.0
+        
+        # 外積による曲率計算
+        cross_product = v1x * v2y - v1y * v2x
+        curvature = abs(cross_product) / (v1_mag * v2_mag)
+        
+        # 正規化（0-1の範囲）
+        return min(curvature, 1.0)
 
     def _calculate_direction_change_frequency(self, velocity_sequence: np.ndarray) -> float:
         """
