@@ -10,58 +10,65 @@ import torch.optim as optim
 import numpy as np
 import json
 import os
+import sys
 from typing import List, Dict, Tuple, Optional
 from datetime import datetime
 import pickle
 
+# プロジェクトルートをパスに追加
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
+
+from config.feature_config import get_feature_dim, get_num_classes
+
 class BasicHandLSTM(nn.Module):
     def __init__(self, 
-                 input_size: int = 18,      # 18次元（作業領域特徴量）
+                 input_size: int = None,    # 設定ファイルから取得
                  hidden_size: int = 64,     # LSTM隠れ層サイズ
                  num_layers: int = 2,       # LSTM層数
-                 num_classes: int = 37,     # 37キー（a-z, 0-9, space）
+                 num_classes: int = None,   # 設定ファイルから取得
                  dropout: float = 0.2):     # ドロップアウト率
         """
         基本的な手の動き学習用LSTMモデル
         
         Args:
-            input_size: 入力特徴量の次元数（作業領域特徴量、18次元）
+            input_size: 入力特徴量の次元数（設定ファイルから取得）
             hidden_size: LSTM隠れ層のサイズ
             num_layers: LSTMの層数
-            num_classes: 分類クラス数（キーの数）
+            num_classes: 分類クラス数（設定ファイルから取得）
             dropout: ドロップアウト率
         """
         super(BasicHandLSTM, self).__init__()
         
-        self.input_size = input_size
+        # 設定ファイルから値を取得（引数で上書き可能）
+        self.input_size = input_size or get_feature_dim()
         self.hidden_size = hidden_size
         self.num_layers = num_layers
-        self.num_classes = num_classes
+        self.num_classes = num_classes or get_num_classes()
         
         # LSTM層
         self.lstm = nn.LSTM(
-            input_size=input_size,
-            hidden_size=hidden_size,
-            num_layers=num_layers,
+            input_size=self.input_size,
+            hidden_size=self.hidden_size,
+            num_layers=self.num_layers,
             batch_first=True,
-            dropout=dropout if num_layers > 1 else 0
+            dropout=dropout if self.num_layers > 1 else 0
         )
         
         # 全結合層
         self.fc = nn.Sequential(
-            nn.Linear(hidden_size, hidden_size // 2),
+            nn.Linear(self.hidden_size, self.hidden_size // 2),
             nn.ReLU(),
             nn.Dropout(dropout),
-            nn.Linear(hidden_size // 2, num_classes)
+            nn.Linear(self.hidden_size // 2, self.num_classes)
         )
         
         # モデル情報
         self.model_info = {
             'model_type': 'BasicHandLSTM',
-            'input_size': input_size,
-            'hidden_size': hidden_size,
-            'num_layers': num_layers,
-            'num_classes': num_classes,
+            'input_size': self.input_size,
+            'hidden_size': self.hidden_size,
+            'num_layers': self.num_layers,
+            'num_classes': self.num_classes,
             'dropout': dropout,
             'created_at': datetime.now().isoformat()
         }
@@ -409,10 +416,10 @@ class HandLSTMTrainer:
 def create_sample_model() -> BasicHandLSTM:
     """サンプルモデルを作成"""
     model = BasicHandLSTM(
-        input_size=15,      # 15次元（作業領域特徴量）
+        input_size=None,    # 設定ファイルから取得
         hidden_size=64,     # LSTM隠れ層サイズ
         num_layers=2,       # LSTM層数
-        num_classes=37,     # 37キー
+        num_classes=None,   # 設定ファイルから取得
         dropout=0.2         # ドロップアウト率
     )
     

@@ -21,6 +21,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from src.processing.data_loader import KeyboardIntentDataset
 from src.processing.models.hand_lstm import BasicHandLSTM
 from torch.utils.data import DataLoader
+from config.feature_config import get_feature_dim
 
 
 def evaluate_on_testset(model_path: str, data_dir: str, 
@@ -158,7 +159,7 @@ def load_model(model_path: str):
         
         # モデル初期化
         model = BasicHandLSTM(
-            input_size=model_config.get('input_size', 18),
+            input_size=model_config.get('input_size', get_feature_dim()),
             hidden_size=model_config.get('hidden_size', 128),
             num_classes=model_config.get('num_classes', 37)
         )

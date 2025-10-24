@@ -24,6 +24,7 @@ from src.processing.models.hand_lstm import BasicHandLSTM
 from src.processing.coordinate_transformer import WorkAreaTransformer
 from src.processing.enhanced_data_collector import EnhancedDataCollector
 from src.processing.data_loader import KeyboardIntentDataset, create_data_loaders
+from config.feature_config import get_feature_dim, get_sequence_length, get_num_classes
 
 
 class TestCoordinateConsistency(unittest.TestCase):
@@ -61,7 +62,7 @@ class TestCoordinateConsistency(unittest.TestCase):
         """WorkAreaTransformerの初期化テスト"""
         transformer = WorkAreaTransformer()
         self.assertIsNotNone(transformer)
-        self.assertEqual(transformer.feature_dim, 15)
+        self.assertEqual(transformer.feature_dim, get_feature_dim())
     
     def test_coordinate_transformation(self):
         """MediaPipe座標 → 作業領域座標の変換テスト"""
@@ -128,7 +129,9 @@ class TestCoordinateConsistency(unittest.TestCase):
         features = extractor.extract_from_trajectory(dummy_trajectory)
         
         # 形状の確認
-        self.assertEqual(features.shape, (60, 15))
+        expected_dim = get_feature_dim()
+        expected_seq_len = get_sequence_length()
+        self.assertEqual(features.shape, (expected_seq_len, expected_dim))
         
         # 特徴量の内容確認
         # 0-1: 作業領域での指の座標
@@ -145,17 +148,20 @@ class TestCoordinateConsistency(unittest.TestCase):
         self.assertTrue(np.all((features[:, 11:] >= -5.0) & (features[:, 11:] <= 5.0)))
     
     def test_model_input(self):
-        """モデルが15次元入力を受け付けることを確認"""
-        model = BasicHandLSTM(input_size=15)
+        """モデルが設定ファイルで定義された次元数入力を受け付けることを確認"""
+        model = BasicHandLSTM()
+        expected_dim = get_feature_dim()
+        expected_seq_len = get_sequence_length()
+        expected_classes = get_num_classes()
         
-        # テスト用の入力データ（batch_size=32, sequence_length=60, feature_dim=15）
-        dummy_input = torch.randn(32, 60, 15)
+        # テスト用の入力データ
+        dummy_input = torch.randn(32, expected_seq_len, expected_dim)
         
         # モデルに通す
         output = model(dummy_input)
         
         # 出力形状の確認
-        self.assertEqual(output.shape, (32, 37))  # 37クラス（a-z, 0-9, space）
+        self.assertEqual(output.shape, (32, expected_classes))
         
         # 出力が確率分布として妥当であることを確認
         probabilities = torch.softmax(output, dim=1)
@@ -227,44 +233,43 @@ class TestCoordinateConsistency(unittest.TestCase):
             
             # データセットの情報確認
             self.assertEqual(len(dataset), 1)  # 1サンプル
-            self.assertEqual(dataset.feature_dim, 15)
-            self.assertEqual(dataset.sequence_length, 60)
-            self.assertEqual(dataset.num_classes, 37)
+            self.assertEqual(dataset.feature_dim, get_feature_dim())
+            self.assertEqual(dataset.sequence_length, get_sequence_length())
+            self.assertEqual(dataset.num_classes, get_num_classes())
             
             # サンプルの取得
             features, label = dataset[0]
             
             # 特徴量の形状確認
-            self.assertEqual(features.shape, (60, 15))
+            self.assertEqual(features.shape, (get_sequence_length(), get_feature_dim()))
             
             # ラベルの確認
             self.assertIsInstance(label, int)
             self.assertGreaterEqual(label, 0)
-            self.assertLess(label, 37)
+            self.assertLess(label, get_num_classes())
             
         except Exception as e:
             self.fail(f"データローダーでの読み込みに失敗: {e}")
     
     def test_model_training_consistency(self):
         """モデルの学習時の一貫性テスト"""
-        # 15次元入力のモデルを作成
-        model = BasicHandLSTM(input_size=15, hidden_size=64)
-        
-        # テスト用の学習データを作成
+        # 設定ファイルから値を取得
+        model = BasicHandLSTM()
         batch_size = 16
-        sequence_length = 60
-        feature_dim = 15
+        sequence_length = get_sequence_length()
+        feature_dim = get_feature_dim()
+        num_classes = get_num_classes()
         
         # ダミーの学習データ
         X_train = torch.randn(batch_size, sequence_length, feature_dim)
-        y_train = torch.randint(0, 37, (batch_size,))
+        y_train = torch.randint(0, num_classes, (batch_size,))
         
         # モデルに通す
         model.train()
         output = model(X_train)
         
         # 出力形状の確認
-        self.assertEqual(output.shape, (batch_size, 37))
+        self.assertEqual(output.shape, (batch_size, num_classes))
         
         # 損失計算
         criterion = torch.nn.CrossEntropyLoss()
@@ -307,7 +312,9 @@ class TestCoordinateConsistency(unittest.TestCase):
         # エラーが発生しないことを確認
         try:
             features = extractor.extract_from_trajectory(incomplete_trajectory)
-            self.assertEqual(features.shape, (60, 15))
+            expected_dim = get_feature_dim()
+            expected_seq_len = get_sequence_length()
+            self.assertEqual(features.shape, (expected_seq_len, expected_dim))
         except Exception as e:
             self.fail(f"不完全なデータでの特徴量抽出に失敗: {e}")
 
