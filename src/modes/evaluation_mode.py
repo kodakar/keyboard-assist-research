@@ -454,14 +454,14 @@ class EvaluationMode:
                     self.current_inputs.append(input_log)
                     
                     # Top-1予測とTop-3予測結果の表示用文字列を作成
-                    top1_pred = ""
+                    top1_key = "[予測なし]"
+                    top1_prob = 0.0
                     top3_str = ""
                     
                     if predicted_top3 and len(predicted_top3) > 0:
                         # Top-1予測（1位予測）
                         top1_key = predicted_top3[0]
                         top1_prob = predicted_probs[0]
-                        top1_pred = f" -> {top1_key}({top1_prob:.0f}%)"
                         
                         # Top-3予測結果
                         top3_display = []
@@ -469,10 +469,9 @@ class EvaluationMode:
                             top3_display.append(f"{key}({prob:.0f}%)")
                         top3_str = f" Top3: [{', '.join(top3_display)}]"
                     else:
-                        top1_pred = " -> [予測なし]"
                         top3_str = " Top3: [なし]"
                     
-                    print(f"   {target_char}{top1_pred} ({'✓' if is_correct else '✗'}) [{input_time:.2f}s]{top3_str}")
+                    print(f"   Target: {target_char} | Actual: {actual_input} | Predict: {top1_key}({top1_prob:.0f}%) ({'✓' if is_correct else '✗'}) [{input_time:.2f}s]{top3_str}")
                     
                     char_idx += 1
                 
@@ -661,6 +660,70 @@ class EvaluationMode:
             'correct_inputs': correct_inputs
         }
     
+    def calculate_detailed_analysis(self) -> Dict:
+        """
+        詳細分析を計算
+        
+        Returns:
+            {
+                'correct_input_count': int,           # 正入力数（Actual = Target）
+                'correct_input_accuracy': float,      # 正入力時の精度
+                'wrong_input_count': int,             # 誤入力数（Actual ≠ Target）
+                'wrong_input_rescue_rate': float      # 誤入力時の救済率
+            }
+        """
+        if not self.evaluation_log:
+            return {
+                'correct_input_count': 0,
+                'correct_input_accuracy': 0.0,
+                'wrong_input_count': 0,
+                'wrong_input_rescue_rate': 0.0
+            }
+        
+        correct_input_count = 0
+        correct_input_with_correct_prediction = 0
+        wrong_input_count = 0
+        wrong_input_with_correct_prediction = 0
+        
+        for task in self.evaluation_log:
+            for input_log in task['inputs']:
+                target_char = input_log['target_char'].lower()
+                actual_input = input_log['actual_input'].lower()
+                predicted_top3 = input_log['predicted_top3']
+                
+                # 予測が正解かどうか
+                prediction_correct = False
+                if predicted_top3 and len(predicted_top3) > 0:
+                    prediction_correct = (predicted_top3[0].lower() == target_char)
+                
+                # 実際の入力が正解かどうか
+                if actual_input == target_char:
+                    # 正入力
+                    correct_input_count += 1
+                    if prediction_correct:
+                        correct_input_with_correct_prediction += 1
+                else:
+                    # 誤入力
+                    wrong_input_count += 1
+                    if prediction_correct:
+                        wrong_input_with_correct_prediction += 1
+        
+        # 指標の計算（ゼロ除算エラー対策）
+        correct_input_accuracy = 0.0
+        if correct_input_count > 0:
+            correct_input_accuracy = (correct_input_with_correct_prediction / correct_input_count) * 100
+        
+        wrong_input_rescue_rate = 0.0
+        if wrong_input_count > 0:
+            wrong_input_rescue_rate = (wrong_input_with_correct_prediction / wrong_input_count) * 100
+        
+        return {
+            'correct_input_count': correct_input_count,
+            'correct_input_accuracy': round(correct_input_accuracy, 2),
+            'wrong_input_count': wrong_input_count,
+            'wrong_input_rescue_rate': round(wrong_input_rescue_rate, 2)
+        }
+    
     def save_results(self, participant_id: str):
         """
         結果をJSON形式で保存
@@ -679,6 +742,7 @@ class EvaluationMode:
             
             # 評価指標の計算
             metrics = self.calculate_metrics()
+            detailed_analysis = self.calculate_detailed_analysis()
             
             # 結果データの構築
             results = {
@@ -686,7 +750,10 @@ class EvaluationMode:
                 'timestamp': datetime.now().isoformat(),
                 'model_path': self.model_path,
                 'evaluation_log': self.evaluation_log,
-                'metrics': metrics
+                'metrics': {
+                    **metrics,
+                    'detailed_analysis': detailed_analysis
+                }
             }
             
             # JSONファイルとして保存
@@ -703,6 +770,7 @@ class EvaluationMode:
         評価結果のサマリーをコンソールに表示
         """
         metrics = self.calculate_metrics()
+        detailed_analysis = self.calculate_detailed_analysis()
         
         print("\n" + "="*60)
         print("📊 評価結果サマリー")
@@ -714,6 +782,28 @@ class EvaluationMode:
         print(f"エラー率:      {metrics['error_rate']:.1f}%")
         print(f"総入力数:      {metrics['total_inputs']}")
         print(f"正解数:        {metrics['correct_inputs']}")
+        print("="*60)
+        
+        # 詳細分析の表示
+        print("\n" + "="*60)
+        print("📈 詳細分析")
+        print("="*60)
+        
+        total_inputs = detailed_analysis['correct_input_count'] + detailed_analysis['wrong_input_count']
+        if total_inputs > 0:
+            correct_percentage = (detailed_analysis['correct_input_count'] / total_inputs) * 100
+            wrong_percentage = (detailed_analysis['wrong_input_count'] / total_inputs) * 100
+            
+            print(f"正入力数:      {detailed_analysis['correct_input_count']} ({correct_percentage:.1f}%)")
+            print(f"  → 正入力時の精度: {detailed_analysis['correct_input_accuracy']:.1f}%")
+            print(f"誤入力数:      {detailed_analysis['wrong_input_count']} ({wrong_percentage:.1f}%)")
+            print(f"  → 誤入力時の救済率: {detailed_analysis['wrong_input_rescue_rate']:.1f}%")
+        else:
+            print("正入力数:      0 (0.0%)")
+            print("  → 正入力時の精度: 0.0%")
+            print("誤入力数:      0 (0.0%)")
+            print("  → 誤入力時の救済率: 0.0%")
+        
         print("="*60)
     
     def cleanup(self):
