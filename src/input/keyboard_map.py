@@ -8,7 +8,7 @@ import cv2
 import numpy as np
 import json
 import os
-from dotenv import load_dotenv
+# from dotenv import load_dotenv
 
 # 新しいモジュールをインポート
 try:
