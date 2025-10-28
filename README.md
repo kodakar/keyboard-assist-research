@@ -86,6 +86,40 @@ python src/modes/prediction_mode.py --model intent_model_YYYYMMDD_HHMMSS
 python src/modes/prediction_mode.py --model models/intent_model_YYYYMMDD_HHMMSS/best_model.pth --map keyboard_map.json
 ```
 
+### 🔀 特徴量次元の切り替え（18/24/30）
+
+特徴量次元は `config/feature_config.py` で管理しています。切り替え方法は 2 通りあります。
+
+1. 一時的に切り替え（環境変数で上書き、ファイル変更なし）
+
+```powershell
+# Windows PowerShell の例（実行中のみ有効）
+$env:FEATURE_DIM=30; python src/modes/evaluation_mode.py --model models/AB_f30/best_model.pth --participant P001 --texts "hello"
+$env:FEATURE_DIM=24; python src/modes/evaluation_mode.py --model models/AB_f24/best_model.pth --participant P001 --texts "hello"
+Remove-Item Env:FEATURE_DIM  # 元に戻す
+```
+
+```bash
+# macOS/Linux の例（実行中のみ有効）
+FEATURE_DIM=30 python src/modes/evaluation_mode.py --model models/AB_f30/best_model.pth --participant P001 --texts "hello"
+FEATURE_DIM=24 python src/modes/evaluation_mode.py --model models/AB_f24/best_model.pth --participant P001 --texts "hello"
+```
+
+2. 恒久的に切り替え（ファイルを直接変更）
+
+```python
+# config/feature_config.py
+FEATURE_CONFIG = {
+    # 'feature_dim': int(os.getenv('FEATURE_DIM', 18)) を 24 や 30 に書き換え
+    'feature_dim': int(os.getenv('FEATURE_DIM', 30)),
+}
+```
+
+注意:
+
+- 使うモデルの入力次元と `feature_dim` を一致させてください（不一致だと入力サイズエラー）
+- 例: 18 次元なら `models/AB/best_model.pth`、30 次元なら `models/AB_f30/best_model.pth`
+
 ## 📖 詳細な使い方
 
 ### データ収集（collect_training_data.py）
@@ -230,18 +264,18 @@ python src/modes/evaluation_mode.py --model models/intent_model_YYYYMMDD_HHMMSS/
 
 **主な機能：**
 
-- **構造化された評価**: 指定されたテキストを1文字ずつ入力
-- **詳細なログ記録**: 目標文字、予測Top-3、実際の入力、正解/不正解、入力時間を記録
-- **自動指標計算**: Top-1精度、Top-3精度、平均入力時間、WPM、エラー率を自動計算
-- **結果保存**: JSON形式で詳細な評価結果を保存
+- **構造化された評価**: 指定されたテキストを 1 文字ずつ入力
+- **詳細なログ記録**: 目標文字、予測 Top-3、実際の入力、正解/不正解、入力時間を記録
+- **自動指標計算**: Top-1 精度、Top-3 精度、平均入力時間、WPM、エラー率を自動計算
+- **結果保存**: JSON 形式で詳細な評価結果を保存
 - **進捗表示**: リアルタイムで進捗状況と予測結果を表示
 
 **評価指標：**
 
-- **Top-1精度**: 1位予測の正解率
-- **Top-3精度**: Top-3予測に正解が含まれる割合
-- **平均入力時間**: 1文字あたりの平均入力時間（秒）
-- **WPM**: Words Per Minute（英語では5文字=1単語として計算）
+- **Top-1 精度**: 1 位予測の正解率
+- **Top-3 精度**: Top-3 予測に正解が含まれる割合
+- **平均入力時間**: 1 文字あたりの平均入力時間（秒）
+- **WPM**: Words Per Minute（英語では 5 文字=1 単語として計算）
 - **エラー率**: 不正解の割合
 
 **保存されるファイル：**
@@ -308,14 +342,14 @@ python evaluate_offline.py \
 **主な機能：**
 
 - **テストセット専用評価**: 学習時に使用されなかったテストデータで評価
-- **詳細な精度分析**: Top-1精度、Top-3精度、クラス別精度を計算
+- **詳細な精度分析**: Top-1 精度、Top-3 精度、クラス別精度を計算
 - **可視化**: 混同行列とクラス別精度のグラフを自動生成
-- **結果保存**: JSON形式で詳細結果、PNG形式で可視化を保存
+- **結果保存**: JSON 形式で詳細結果、PNG 形式で可視化を保存
 
 **評価指標：**
 
-- **Top-1精度**: 1位予測の正解率
-- **Top-3精度**: Top-3予測に正解が含まれる割合
+- **Top-1 精度**: 1 位予測の正解率
+- **Top-3 精度**: Top-3 予測に正解が含まれる割合
 - **クラス別精度**: 各キー（a-z, 0-9, スペース）の個別精度
 - **混同行列**: 予測結果の詳細な分析
 
@@ -502,13 +536,14 @@ keyboard-assist-research/
 
 ### データ分割方法
 
-このシステムでは**3分割**を採用して機械学習のベストプラクティスに従っています：
+このシステムでは**3 分割**を採用して機械学習のベストプラクティスに従っています：
 
 - **訓練データ（60%）**: モデルの学習に使用
-- **検証データ（20%）**: ハイパーパラメータ調整とEarly Stoppingに使用
+- **検証データ（20%）**: ハイパーパラメータ調整と Early Stopping に使用
 - **テストデータ（20%）**: 最終的な汎化性能評価に使用（一度も触れない）
 
 #### 分割の特徴
+
 - **ユーザー別分割**: 各ユーザーのデータを個別に分割（データリーク防止）
 - **層化分割**: 各キーの分布を訓練・検証・テストで均等に保持
 - **再現性**: 固定シード（random_state=42）で同じ分割結果を保証
@@ -549,7 +584,7 @@ keyboard-assist-research/
 
 ### 3. 過学習の防止
 
-- **3分割データ**: 訓練データ 60%、検証データ 20%、テストデータ 20%に分割
+- **3 分割データ**: 訓練データ 60%、検証データ 20%、テストデータ 20%に分割
 - **Early Stopping**: 検証損失が 5 エポック改善しない場合に停止
 - **データ拡張**: ガウシアンノイズ、時間軸の伸縮
 - **真の汎化性能**: テストデータで最終評価（ハイパーパラメータ調整に使用しない）

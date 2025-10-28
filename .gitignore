@@ -36,6 +36,7 @@ learning_curves.png
 
 # 評価結果
 evaluation_results/
+analysis_results/
 
 # データ収集の一時ファイル
 data/training/*/session_*/sample_*.json

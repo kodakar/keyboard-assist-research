@@ -8,8 +8,10 @@ from typing import Dict, Any
 
 # 環境変数で上書き可能な設定
 FEATURE_CONFIG: Dict[str, Any] = {
-    # 特徴量の次元数（30次元に拡張）
-    'feature_dim': int(os.getenv('FEATURE_DIM', 30)),
+    # 特徴量の次元数（デフォルト18）
+    # - 環境変数で一時的に上書き可能（例: PowerShell → $env:FEATURE_DIM=30; python ...）
+    # - 直接ここを書き換えてもOK（例: 18→30）。その場合は環境変数は不要
+    'feature_dim': int(os.getenv('FEATURE_DIM', 18)),
     
     # 時系列データの長さ（フレーム数）
     'sequence_length': int(os.getenv('SEQUENCE_LENGTH', 60)),
@@ -49,13 +51,12 @@ FEATURE_CONFIG: Dict[str, Any] = {
         (0.0, 2.0),      # 29: velocity_consistency
     ],
     
-    # 特徴量の構成（30次元の内訳）
+    # 特徴量の構成（18次元の内訳）
     'feature_breakdown': {
         'spatial_info': 11,      # 空間情報: 指の座標(2) + 相対座標(6) + 距離(3)
-        'motion_info': 9,        # 動き情報: 速度(2) + 加速度(2) + 大きさ(2) + ジャーク(1) + 軌跡長(1) + 接近速度(1)
-        'direction_info': 4,     # 方向情報: 目標角度(1) + 速度角度(1) + 角度ズレ(1) + 曲率(1)
-        'stability_info': 5,     # 震え・安定性: 振幅(2) + 方向転換(1) + 速度標準偏差(1) + 変動係数(1)
-        'time_info': 1,          # 時間情報: 経過時間(1)
+        'motion_info': 4,        # 動き情報: 速度(2) + 加速度(2)
+        'stability_info': 3,     # 震え・安定性: 振幅(2) + 方向転換(1)
+        'time_info': 0,          # 時間情報: なし
     },
     
     # データ拡張の設定

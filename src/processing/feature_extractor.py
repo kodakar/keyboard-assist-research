@@ -129,21 +129,61 @@ class FeatureExtractor:
                 past_vel_x = vel_x[start_idx:i]  # 過去window_sizeフレーム（現在フレームは含まない）
                 direction_change_freq = self._calculate_direction_change_frequency(past_vel_x)
 
-            # 30次元特徴量の実装
-            # 新規追加特徴量の計算
-            new_features = self._calculate_new_features(
-                i, trajectory_data, idx_x, idx_y, vel_x, vel_y, acc_x, acc_y, 
-                finger_x, finger_y, nearest_keys, cumulative_lengths
-            )
-            
-            features[i] = np.concatenate([
-                np.array([finger_x, finger_y], dtype=np.float32),  # 2次元: 指の座標
-                rel,  # 6次元: 最近傍3キーへの相対座標
-                dists,  # 3次元: 最近傍3キーへの距離
-                np.array([vxa, vya, axa, aya], dtype=np.float32),  # 4次元: 速度・加速度
-                np.array([amplitude_x, amplitude_y, direction_change_freq], dtype=np.float32),  # 3次元: 既存特徴量
-                new_features  # 12次元: 新規特徴量
-            ])
+            # 特徴量の実装（18次元、24次元、30次元）
+            if self.feature_dim == 18:
+                # 18次元特徴量の実装
+                features[i] = np.concatenate([
+                    np.array([finger_x, finger_y], dtype=np.float32),  # 2次元: 指の座標
+                    rel,  # 6次元: 最近傍3キーへの相対座標
+                    dists,  # 3次元: 最近傍3キーへの距離
+                    np.array([vxa, vya, axa, aya], dtype=np.float32),  # 4次元: 速度・加速度
+                    np.array([amplitude_x, amplitude_y, direction_change_freq], dtype=np.float32),  # 3次元: 既存特徴量
+                ])
+            elif self.feature_dim == 24:
+                # 24次元特徴量の実装（重要度の低い特徴量を削除）
+                new_features = self._calculate_new_features(
+                    i, trajectory_data, idx_x, idx_y, vel_x, vel_y, acc_x, acc_y, 
+                    finger_x, finger_y, nearest_keys, cumulative_lengths
+                )
+                
+                # 削除する特徴量: amplitude_x, amplitude_y, elapsed_time, acc_x, acc_y, acceleration_magnitude
+                # 残す特徴量: target_angle, velocity_angle, angle_to_target, speed, jerk, trajectory_length, approach_velocity, trajectory_curvature, speed_std, velocity_consistency
+                selected_new_features = np.array([
+                    new_features[1],  # target_angle
+                    new_features[2],  # velocity_angle
+                    new_features[3],  # angle_to_target
+                    new_features[4],  # speed
+                    new_features[6],  # jerk
+                    new_features[7],  # trajectory_length
+                    new_features[8],  # approach_velocity
+                    new_features[9],  # trajectory_curvature
+                    new_features[10], # speed_std
+                    new_features[11], # velocity_consistency
+                ], dtype=np.float32)
+                
+                features[i] = np.concatenate([
+                    np.array([finger_x, finger_y], dtype=np.float32),  # 2次元: 指の座標
+                    rel,  # 6次元: 最近傍3キーへの相対座標
+                    dists,  # 3次元: 最近傍3キーへの距離
+                    np.array([vxa, vya], dtype=np.float32),  # 2次元: 速度（加速度を削除）
+                    np.array([direction_change_freq], dtype=np.float32),  # 1次元: 方向転換頻度（振幅を削除）
+                    selected_new_features  # 10次元: 選択された新規特徴量
+                ])
+            else:
+                # 30次元特徴量の実装
+                new_features = self._calculate_new_features(
+                    i, trajectory_data, idx_x, idx_y, vel_x, vel_y, acc_x, acc_y, 
+                    finger_x, finger_y, nearest_keys, cumulative_lengths
+                )
+                
+                features[i] = np.concatenate([
+                    np.array([finger_x, finger_y], dtype=np.float32),  # 2次元: 指の座標
+                    rel,  # 6次元: 最近傍3キーへの相対座標
+                    dists,  # 3次元: 最近傍3キーへの距離
+                    np.array([vxa, vya, axa, aya], dtype=np.float32),  # 4次元: 速度・加速度
+                    np.array([amplitude_x, amplitude_y, direction_change_freq], dtype=np.float32),  # 3次元: 既存特徴量
+                    new_features  # 12次元: 新規特徴量
+                ])
 
         # 正規化/クリップ（設定ファイルから取得）
         finger_coords_range = get_normalization_range('finger_coords')
@@ -156,12 +196,25 @@ class FeatureExtractor:
         features[:, :2] = np.clip(features[:, :2], *finger_coords_range)  # 指の座標
         features[:, 2:8] = np.clip(features[:, 2:8], *relative_coords_range)  # 相対座標
         features[:, 8:11] = np.clip(features[:, 8:11], *distances_range)  # 距離
-        features[:, 11:15] = np.clip(features[:, 11:15], *velocity_acceleration_range)  # 速度・加速度
-        features[:, 15:18] = np.clip(features[:, 15:18], *amplitude_direction_range)  # 既存特徴量（振幅・方向転換頻度）
-        # 新規特徴量の個別クリップ（設定ファイルから範囲を取得）
-        for j in range(18, 30):  # 18-29番目の特徴量
-            clip_range = get_new_feature_range(j - 18)  # インデックス0-11に対応
-            features[:, j] = np.clip(features[:, j], *clip_range)
+        
+        if self.feature_dim == 18:
+            features[:, 11:15] = np.clip(features[:, 11:15], *velocity_acceleration_range)  # 速度・加速度
+            features[:, 15:18] = np.clip(features[:, 15:18], *amplitude_direction_range)  # 既存特徴量
+        elif self.feature_dim == 24:
+            features[:, 11:13] = np.clip(features[:, 11:13], *velocity_acceleration_range)  # 速度（加速度を削除）
+            features[:, 13:14] = np.clip(features[:, 13:14], *amplitude_direction_range)  # 方向転換頻度（振幅を削除）
+            # 24次元の新規特徴量の個別クリップ（選択された特徴量のみ）
+            selected_indices = [1, 2, 3, 4, 6, 7, 8, 9, 10, 11]  # 削除した特徴量を除く
+            for k, j in enumerate(selected_indices):
+                clip_range = get_new_feature_range(j)  # 元のインデックス
+                features[:, 14 + k] = np.clip(features[:, 14 + k], *clip_range)
+        else:  # 30次元
+            features[:, 11:15] = np.clip(features[:, 11:15], *velocity_acceleration_range)  # 速度・加速度
+            features[:, 15:18] = np.clip(features[:, 15:18], *amplitude_direction_range)  # 既存特徴量
+            # 新規特徴量の個別クリップ（設定ファイルから範囲を取得）
+            for j in range(18, 30):  # 18-29番目の特徴量
+                clip_range = get_new_feature_range(j - 18)  # インデックス0-11に対応
+                features[:, j] = np.clip(features[:, j], *clip_range)
 
         # 出力形状の保証
         assert features.shape == (self.sequence_length, self.feature_dim), \
