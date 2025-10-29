@@ -286,7 +286,7 @@ class CalibrationHelper:
         result = frame.copy()
         h, w = frame.shape[:2]
         
-        labels = ["1:左上", "2:右上", "3:右下", "4:左下"]
+        labels = ["1:Top-Left", "2:Top-Right", "3:Bottom-Right", "4:Bottom-Left"]
         colors = [(255, 0, 0), (0, 255, 0), (0, 0, 255), (255, 255, 0)]
         
         for i, (norm_x, norm_y) in enumerate(self.clicked_points):
@@ -302,7 +302,7 @@ class CalibrationHelper:
                 cv2.putText(result, labels[i], (x + 15, y - 10),
                            cv2.FONT_HERSHEY_SIMPLEX, 0.6, colors[i], 2)
         
-        # 4点揃ったら矩形を描画
+        # 4点揃ったら矩形とキーボードレイアウトを描画
         if len(self.clicked_points) == 4:
             pts = []
             for norm_x, norm_y in self.clicked_points:
@@ -311,5 +311,104 @@ class CalibrationHelper:
             
             # 矩形を描画
             cv2.polylines(result, [pts], True, (0, 255, 255), 2)
+            
+            # キーボードレイアウトを描画
+            result = self._draw_keyboard_layout(result, pts)
         
         return result
+    
+    def _draw_keyboard_layout(self, frame, corners):
+        """
+        キーボードレイアウトを描画
+        
+        Args:
+            frame: 描画対象の画像
+            corners: 4隅の座標 [[x1,y1], [x2,y2], [x3,y3], [x4,y4]]
+        
+        Returns:
+            描画後の画像
+        """
+        import cv2
+        import numpy as np
+        
+        # 4隅からキー配置を計算
+        try:
+            # frameのサイズ情報を渡してピクセル座標を計算
+            h, w = frame.shape[:2]
+            key_positions = self._calculate_key_positions_from_corners(corners, (h, w))
+            
+            # 各キーを描画
+            for key, (center_x, center_y, width, height) in key_positions.items():
+                # キーの四角形を描画
+                x1 = int(center_x - width/2)
+                y1 = int(center_y - height/2)
+                x2 = int(center_x + width/2)
+                y2 = int(center_y + height/2)
+                
+                # キーの枠を描画（全て緑）
+                cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+                
+                # キーの文字を描画
+                if key == ' ':
+                    key_text = 'SPACE'
+                else:
+                    key_text = key.upper()
+                
+                # 文字サイズを調整
+                font_scale = min(width/30, height/30, 0.6)
+                font_scale = max(font_scale, 0.3)  # 最小サイズ
+                
+                # 文字の位置を中央に調整
+                text_size = cv2.getTextSize(key_text, cv2.FONT_HERSHEY_SIMPLEX, font_scale, 1)[0]
+                text_x = int(center_x - text_size[0]/2)
+                text_y = int(center_y + text_size[1]/2)
+                
+                # 文字を描画（白色）
+                cv2.putText(frame, key_text, (text_x, text_y),
+                           cv2.FONT_HERSHEY_SIMPLEX, font_scale, (255, 255, 255), 1)
+            
+            # 重要キーのハイライトは不要のため非表示
+        
+        except Exception as e:
+            # エラー時は何もしない
+            pass
+        
+        return frame
+    
+    def _calculate_key_positions_from_corners(self, corners, frame_shape):
+        """
+        4隅の座標からキー位置を計算（描画用）
+        
+        Args:
+            corners: 4隅の座標 [[x1,y1], [x2,y2], [x3,y3], [x4,y4]]
+        
+        Returns:
+            dict: {key: (center_x, center_y, width, height)}
+        """
+        import numpy as np
+        
+        # 4隅を正規化座標に変換（frame_shapeを使用）
+        h, w = frame_shape
+        normalized_corners = []
+        for corner in corners:
+            norm_x = corner[0] / w
+            norm_y = corner[1] / h
+            normalized_corners.append((norm_x, norm_y))
+        
+        # 既存のマッパーで正規化キー配置を取得
+        key_positions_norm = self.mapper.map_from_corners(normalized_corners)
+        
+        # ピクセル座標に変換
+        pixel_positions = {}
+        for key, pos in key_positions_norm.items():
+            norm_x = pos['x']
+            norm_y = pos['y']
+            norm_width = pos['width']
+            norm_height = pos['height']
+            center_x = int(norm_x * w)
+            center_y = int(norm_y * h)
+            width = int(norm_width * w)
+            height = int(norm_height * h)
+            pixel_positions[key] = (center_x, center_y, width, height)
+        
+        return pixel_positions

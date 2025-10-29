@@ -61,11 +61,11 @@ class TrainingDataCollector:
         # セッションデータの保存先
         self.session_dir = self._create_session_directory()
         
-        print(f"🎯 データ収集セッション開始")
-        print(f"   ユーザーID: {user_id}")
-        print(f"   目標テキスト: {session_text}")
-        print(f"   繰り返し回数: {repetitions}")
-        print(f"   セッションディレクトリ: {self.session_dir}")
+        print(f"🎯 Data Collection Session Started")
+        print(f"   User ID: {user_id}")
+        print(f"   Target Text: {session_text}")
+        print(f"   Repetitions: {repetitions}")
+        print(f"   Session Directory: {self.session_dir}")
     
     def _create_session_directory(self) -> str:
         """セッションディレクトリを作成"""
@@ -77,7 +77,7 @@ class TrainingDataCollector:
     def initialize_components(self) -> bool:
         """コンポーネントの初期化"""
         try:
-            print("🔧 コンポーネントを初期化中...")
+            print("🔧 Initializing components...")
             
             # カメラの初期化
             self.camera = Camera()
@@ -464,30 +464,30 @@ class TrainingDataCollector:
         """画面表示を更新"""
         h, w = frame.shape[:2]
         
-        # 上部：目標テキストを表示
-        target_text = f"目標テキスト: {self.session_text}"
+        # Target text display
+        target_text = f"Target Text: {self.session_text}"
         cv2.putText(frame, target_text, (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (255, 255, 255), 2)
         
-        # 次に入力すべき文字をハイライト
-        next_char_text = f"次に入力: '{target_char}'"
+        # Next character to input (highlighted)
+        next_char_text = f"Next Input: '{target_char}'"
         cv2.putText(frame, next_char_text, (20, 80), cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 255, 0), 3)
         
-        # 進捗状況を表示
-        progress_text = f"進捗: {self.current_char_index + 1}/{len(self.session_text)} 文字"
+        # Progress display
+        progress_text = f"Progress: {self.current_char_index + 1}/{len(self.session_text)} chars"
         cv2.putText(frame, progress_text, (20, 120), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 0), 2)
         
-        # 繰り返し回数を表示
-        repetition_text = f"繰り返し: {self.current_repetition + 1}/{self.repetitions} 回"
+        # Repetition count
+        repetition_text = f"Repetition: {self.current_repetition + 1}/{self.repetitions}"
         cv2.putText(frame, repetition_text, (20, 150), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 0), 2)
         
-        # 正解率を表示
+        # Accuracy display
         if self.total_inputs > 0:
             accuracy = (self.correct_inputs / self.total_inputs * 100)
-            accuracy_text = f"正解率: {accuracy:.1f}%"
+            accuracy_text = f"Accuracy: {accuracy:.1f}%"
             cv2.putText(frame, accuracy_text, (20, 180), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 255), 2)
         
-        # 操作説明を表示
-        instruction_text = "SPACE: 開始/停止 | R: リトライ | ESC: 終了"
+        # Instructions
+        instruction_text = "SPACE: Start/Stop | R: Retry | ESC: Exit"
         cv2.putText(frame, instruction_text, (20, h - 20), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (200, 200, 200), 1)
         
         return frame
