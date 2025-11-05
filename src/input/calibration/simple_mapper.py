@@ -285,6 +285,12 @@ class CalibrationHelper:
         
         result = frame.copy()
         h, w = frame.shape[:2]
+
+        # マッピング中は常時表示する水平ガイド線（1/3 高さ、半透明、細線）
+        overlay = result.copy()
+        guide_y = int(h / 6)
+        cv2.line(overlay, (0, guide_y), (w - 1, guide_y), (0, 180, 0), 2)
+        cv2.addWeighted(overlay, 0.4, result, 0.6, 0, result)
         
         labels = ["1:Top-Left", "2:Top-Right", "3:Bottom-Right", "4:Bottom-Left"]
         colors = [(255, 0, 0), (0, 255, 0), (0, 0, 255), (255, 255, 0)]
@@ -337,6 +343,9 @@ class CalibrationHelper:
             h, w = frame.shape[:2]
             key_positions = self._calculate_key_positions_from_corners(corners, (h, w))
             
+            # 半透明描画用オーバーレイ
+            overlay = frame.copy()
+
             # 各キーを描画
             for key, (center_x, center_y, width, height) in key_positions.items():
                 # キーの四角形を描画
@@ -345,8 +354,8 @@ class CalibrationHelper:
                 x2 = int(center_x + width/2)
                 y2 = int(center_y + height/2)
                 
-                # キーの枠を描画（全て緑）
-                cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+                # 細め・半透明の枠（オーバーレイ側に1pxで描画）
+                cv2.rectangle(overlay, (x1, y1), (x2, y2), (0, 180, 0), 2)
                 
                 # キーの文字を描画
                 if key == ' ':
@@ -363,9 +372,12 @@ class CalibrationHelper:
                 text_x = int(center_x - text_size[0]/2)
                 text_y = int(center_y + text_size[1]/2)
                 
-                # 文字を描画（白色）
-                cv2.putText(frame, key_text, (text_x, text_y),
-                           cv2.FONT_HERSHEY_SIMPLEX, font_scale, (255, 255, 255), 1)
+                # 文字もオーバーレイ側に描画（やや淡い緑白）
+                cv2.putText(overlay, key_text, (text_x, text_y),
+                           cv2.FONT_HERSHEY_SIMPLEX, font_scale, (200, 255, 200), 1)
+            
+            # 半透明で合成（矩形と文字を薄く表示）
+            cv2.addWeighted(overlay, 0.4, frame, 0.6, 0, frame)
             
             # 重要キーのハイライトは不要のため非表示
         
