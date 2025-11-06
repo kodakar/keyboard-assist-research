@@ -458,11 +458,54 @@ class KeyboardIntentDataset(Dataset):
         }
 
 
+def variable_length_collate_fn(batch):
+    """
+    可変長対応のバッチ処理関数
+    
+    異なる長さの系列をパディングして、長さ情報を保持する
+    
+    Args:
+        batch: [(features, label), ...] のリスト
+    
+    Returns:
+        padded_sequences: パディング済み系列 (batch_size, max_length, feature_dim)
+        labels: ラベル (batch_size,)
+        lengths: 各系列の実際の長さ (batch_size,)
+    """
+    # 特徴量とラベルを分離
+    sequences = [item[0] for item in batch]  # 各要素は (seq_len, feature_dim)
+    labels = [item[1] for item in batch]      # 各要素はスカラー
+    
+    # 長さ情報を取得
+    lengths = torch.tensor([len(seq) for seq in sequences], dtype=torch.long)
+    
+    # 最大長を取得
+    max_length = max(lengths).item()
+    feature_dim = sequences[0].shape[-1]
+    
+    # パディング
+    padded = []
+    for seq in sequences:
+        pad_length = max_length - len(seq)
+        if pad_length > 0:
+            # ゼロパディング
+            padded_seq = torch.cat([seq, torch.zeros(pad_length, feature_dim)])
+        else:
+            padded_seq = seq
+        padded.append(padded_seq)
+    
+    # テンソルに変換
+    padded_sequences = torch.stack(padded)  # (batch_size, max_length, feature_dim)
+    labels_tensor = torch.tensor(labels, dtype=torch.long)
+    
+    return padded_sequences, labels_tensor, lengths
+
+
 def create_data_loaders(data_dir: str, batch_size: int = 32, 
                        sequence_length: int = None, train_ratio: float = 0.6,
                        val_ratio: float = 0.2, test_ratio: float = 0.2,
                        augment: bool = True, num_workers: int = 0,
-                       random_seed: int = 42) -> Tuple[DataLoader, DataLoader, DataLoader]:
+                       random_seed: int = 42, use_variable_length: bool = False) -> Tuple[DataLoader, DataLoader, DataLoader]:
     """
     データローダーを作成（3分割対応）
     
@@ -476,6 +519,7 @@ def create_data_loaders(data_dir: str, batch_size: int = 32,
         augment: データ拡張を行うかどうか
         num_workers: データ読み込みのワーカー数
         random_seed: 乱数シード
+        use_variable_length: 可変長対応を使うかどうか
         
     Returns:
         train_loader: 訓練データローダー
@@ -519,13 +563,17 @@ def create_data_loaders(data_dir: str, batch_size: int = 32,
         random_seed=random_seed
     )
     
+    # collate_fnの選択
+    collate_fn = variable_length_collate_fn if use_variable_length else None
+    
     # データローダーの作成
     train_loader = DataLoader(
         train_dataset,
         batch_size=batch_size,
         shuffle=True,
         num_workers=num_workers,
-        pin_memory=True if torch.cuda.is_available() else False
+        pin_memory=True if torch.cuda.is_available() else False,
+        collate_fn=collate_fn
     )
     
     val_loader = DataLoader(
@@ -533,7 +581,8 @@ def create_data_loaders(data_dir: str, batch_size: int = 32,
         batch_size=batch_size,
         shuffle=False,
         num_workers=num_workers,
-        pin_memory=True if torch.cuda.is_available() else False
+        pin_memory=True if torch.cuda.is_available() else False,
+        collate_fn=collate_fn
     )
     
     test_loader = DataLoader(
@@ -541,7 +590,8 @@ def create_data_loaders(data_dir: str, batch_size: int = 32,
         batch_size=batch_size,
         shuffle=False,
         num_workers=num_workers,
-        pin_memory=True if torch.cuda.is_available() else False
+        pin_memory=True if torch.cuda.is_available() else False,
+        collate_fn=collate_fn
     )
     
     print(f"✅ データローダー作成完了（3分割）")

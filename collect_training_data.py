@@ -56,7 +56,7 @@ class TrainingDataCollector:
         # データ収集の状態
         self.is_collecting = False
         self.collection_start_time = None
-        self.trajectory_buffer = deque(maxlen=60)  # 2秒分（30fps × 2秒）
+        self.trajectory_buffer = deque(maxlen=90)  # 可変長対応: 最大90フレーム（3秒）
         
         # セッションデータの保存先
         self.session_dir = self._create_session_directory()
@@ -424,16 +424,22 @@ class TrainingDataCollector:
         
         self.total_inputs += 1
         
-        # 軌跡データを取得（前60フレーム）
+        # 軌跡データを取得（可変長：現在のバッファ内容）
         trajectory_data = list(self.data_collector.trajectory_buffer)
+        trajectory_length = len(trajectory_data)
         
         # デバッグ情報を追加
         print(f"   🔍 軌跡データ収集状況:")
         print(f"      - バッファサイズ: {len(self.data_collector.trajectory_buffer)}")
-        print(f"      - 軌跡データ長: {len(trajectory_data)}")
+        print(f"      - 軌跡データ長: {trajectory_length} フレーム")
         if trajectory_data:
             print(f"      - 最初のフレーム: {trajectory_data[0].get('frame_index', 'N/A')}")
             print(f"      - 最後のフレーム: {trajectory_data[-1].get('frame_index', 'N/A')}")
+        
+        # 最低フレーム数チェック（5フレーム未満は技術的に無理）
+        if trajectory_length < 5:
+            print(f"   ⚠️ フレーム数不足: {trajectory_length}F < 5F（スキップ）")
+            return False
         
         # サンプルデータを作成
         sample_data = {
@@ -454,6 +460,10 @@ class TrainingDataCollector:
         
         # サンプルを保存
         self._save_sample(sample_data, target_key)
+        
+        # バッファをクリア（可変長対応：次のキーの軌跡を独立させる）
+        self.data_collector.trajectory_buffer.clear()
+        print(f"   🔄 バッファクリア（次のキーの軌跡を新規収集）")
         
         # 次の文字に進む
         self.current_char_index += 1

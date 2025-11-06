@@ -25,6 +25,7 @@ from src.input.keyboard_map import KeyboardMap
 from src.input.keyboard_tracker import KeyboardTracker
 from src.processing.coordinate_transformer import WorkAreaTransformer
 from src.processing.models.hand_lstm import BasicHandLSTM
+from src.processing.models.hand_models import create_model
 from src.processing.feature_extractor import FeatureExtractor
 
 
@@ -52,7 +53,7 @@ class EvaluationMode:
         self.model = None
         
         # 予測用のバッファ（学習システムと統一）
-        self.trajectory_buffer = deque(maxlen=60)  # 60フレーム分の軌跡データ
+        self.trajectory_buffer = deque(maxlen=90)  # 可変長対応：最大90フレーム
         
         # 予測結果
         self.current_prediction = None
@@ -61,8 +62,12 @@ class EvaluationMode:
         self.KEY_CHARS = None
         self.label_map_loaded = False
         
+        # モデル設定（load_modelで設定される）
+        self.min_frames = 60  # デフォルト値（固定長モデル用）
+        self.use_variable_length = False
+        
         # 特徴量抽出器（学習システムと統一）
-        self.feature_extractor = FeatureExtractor(sequence_length=60, fps=30.0)
+        self.feature_extractor = FeatureExtractor(sequence_length=90, fps=30.0)
         
         # 評価ログ
         self.evaluation_log = []
@@ -196,12 +201,41 @@ class EvaluationMode:
             else:
                 self.label_map_loaded = True
 
-            # モデルの初期化
-            self.model = BasicHandLSTM(
-                input_size=input_size,
-                hidden_size=hidden_size,
-                num_classes=num_classes
-            )
+            # モデルタイプの取得（デフォルトはlstm）
+            model_type = model_config.get('model_type', 'lstm')
+            self.use_variable_length = model_config.get('use_variable_length', False)
+            
+            # 最低フレーム数の設定
+            if self.use_variable_length:
+                self.min_frames = 5  # 可変長モデル：最低5フレーム
+            else:
+                self.min_frames = 60  # 固定長モデル：60フレーム必須
+            
+            print(f"   モデルタイプ: {model_type.upper()}")
+            print(f"   可変長対応: {'有効' if self.use_variable_length else '無効'}")
+            print(f"   最低フレーム数: {self.min_frames}")
+            
+            # モデルの初期化（model_typeに応じて）
+            if model_type in ['cnn', 'gru', 'lstm', 'tcn']:
+                # 新しいモデル構造
+                model_params = {
+                    'model_type': model_type,
+                    'input_size': input_size,
+                    'num_classes': num_classes
+                }
+                
+                # GRU/LSTMのみhidden_sizeパラメータを追加
+                if model_type in ['gru', 'lstm']:
+                    model_params['hidden_size'] = hidden_size
+                
+                self.model = create_model(**model_params)
+            else:
+                # 古いモデル（後方互換性）
+                self.model = BasicHandLSTM(
+                    input_size=input_size,
+                    hidden_size=hidden_size,
+                    num_classes=num_classes
+                )
             
             # 重みの読み込み
             self.model.load_state_dict(checkpoint['model_state_dict'])
@@ -276,7 +310,8 @@ class EvaluationMode:
     def predict_intent(self) -> Optional[List[Tuple[str, float]]]:
         """入力意図を予測"""
         try:
-            if len(self.trajectory_buffer) < 60:
+            # 最低フレーム数チェック（モデルの種類に応じて動的に変更）
+            if len(self.trajectory_buffer) < self.min_frames:
                 return None
             
             # 軌跡データを特徴量に変換（学習システムと統一）
@@ -286,8 +321,12 @@ class EvaluationMode:
             # テンソルに変換
             features_tensor = torch.FloatTensor(features_np).unsqueeze(0).to(self.device)
             
+            # 実際の系列長を取得（可変長対応）
+            actual_length = features_tensor.shape[1]
+            lengths = torch.tensor([actual_length]).to(self.device)
+            
             with torch.no_grad():
-                outputs = self.model(features_tensor)
+                outputs = self.model(features_tensor, lengths)
                 probabilities = torch.softmax(outputs, dim=1)
             
             # Top-3の予測結果を取得
