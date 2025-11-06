@@ -13,8 +13,8 @@ git_user_change.txt
 key.txt
 
 # 学習済みモデルと結果ファイル
-models/
-runs/
+/models/
+/runs/
 *.pth
 *.pt
 *.pkl
