@@ -304,19 +304,28 @@ class PredictionMode:
             
             # 軌跡データを特徴量に変換（学習システムと統一）
             trajectory_data = list(self.trajectory_buffer)
-            features_np = self.feature_extractor.extract_from_trajectory(trajectory_data)
+            
+            # 可変長モードか固定長モードかで特徴量抽出方法を分岐
+            if self.use_variable_length:
+                # 可変長モード: 実際の長さで特徴量を抽出
+                features_np = self.feature_extractor.extract_from_trajectory_variable_length(trajectory_data)
+                actual_length = len(trajectory_data)
+            else:
+                # 固定長モード: 固定長で特徴量を抽出
+                features_np = self.feature_extractor.extract_from_trajectory(trajectory_data)
+                actual_length = features_np.shape[0]  # 固定長（sequence_length）
             
             # テンソルに変換
             features_tensor = torch.FloatTensor(features_np).unsqueeze(0).to(self.device)
             
             # 実際の系列長を取得（可変長対応：バッファから）
-            actual_length = len(self.trajectory_buffer)
-            lengths = torch.tensor([actual_length]).to(self.device)
+            lengths = torch.tensor([actual_length]).to(self.device) if self.use_variable_length else None
             
             # 推論時間の計測
             start_time = time.time()
             
             with torch.no_grad():
+                # 可変長モードの場合はlengthsを渡す、固定長モードの場合はNone
                 outputs = self.model(features_tensor, lengths)
                 probabilities = torch.softmax(outputs, dim=1)
             

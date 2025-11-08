@@ -536,8 +536,11 @@ def variable_length_collate_fn(batch):
     for seq in sequences:
         pad_length = max_length - len(seq)
         if pad_length > 0:
-            # ゼロパディング
-            padded_seq = torch.cat([seq, torch.zeros(pad_length, feature_dim)])
+            # ゼロパディング（型とデバイスを一致させる）
+            padded_seq = torch.cat([
+                seq, 
+                torch.zeros(pad_length, feature_dim, dtype=seq.dtype, device=seq.device)
+            ])
         else:
             padded_seq = seq
         padded.append(padded_seq)

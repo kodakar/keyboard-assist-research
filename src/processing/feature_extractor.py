@@ -143,7 +143,8 @@ class FeatureExtractor:
                 # 24次元特徴量の実装（重要度の低い特徴量を削除）
                 new_features = self._calculate_new_features(
                     i, trajectory_data, idx_x, idx_y, vel_x, vel_y, acc_x, acc_y, 
-                    finger_x, finger_y, nearest_keys, cumulative_lengths
+                    finger_x, finger_y, nearest_keys, cumulative_lengths,
+                    use_actual_length=False  # 固定長モード
                 )
                 
                 # 削除する特徴量: amplitude_x, amplitude_y, elapsed_time, acc_x, acc_y, acceleration_magnitude
@@ -173,7 +174,8 @@ class FeatureExtractor:
                 # 30次元特徴量の実装
                 new_features = self._calculate_new_features(
                     i, trajectory_data, idx_x, idx_y, vel_x, vel_y, acc_x, acc_y, 
-                    finger_x, finger_y, nearest_keys, cumulative_lengths
+                    finger_x, finger_y, nearest_keys, cumulative_lengths,
+                    use_actual_length=False  # 固定長モード
                 )
                 
                 features[i] = np.concatenate([
@@ -349,7 +351,8 @@ class FeatureExtractor:
                 # 24次元特徴量の実装
                 new_features = self._calculate_new_features(
                     i, trajectory_data, idx_x, idx_y, vel_x, vel_y, acc_x, acc_y,
-                    finger_x, finger_y, nearest_keys, cumulative_lengths
+                    finger_x, finger_y, nearest_keys, cumulative_lengths,
+                    use_actual_length=True  # 可変長モード
                 )
                 
                 selected_new_features = np.array([
@@ -370,7 +373,8 @@ class FeatureExtractor:
                 # 30次元特徴量の実装
                 new_features = self._calculate_new_features(
                     i, trajectory_data, idx_x, idx_y, vel_x, vel_y, acc_x, acc_y,
-                    finger_x, finger_y, nearest_keys, cumulative_lengths
+                    finger_x, finger_y, nearest_keys, cumulative_lengths,
+                    use_actual_length=True  # 可変長モード
                 )
                 
                 features[i] = np.concatenate([
@@ -415,17 +419,26 @@ class FeatureExtractor:
 
     def _calculate_new_features(self, i: int, trajectory_data: List[Dict], idx_x: List[float], idx_y: List[float], 
                                vel_x: np.ndarray, vel_y: np.ndarray, acc_x: np.ndarray, acc_y: np.ndarray,
-                               finger_x: float, finger_y: float, nearest_keys: List[Dict], cumulative_lengths: np.ndarray) -> np.ndarray:
+                               finger_x: float, finger_y: float, nearest_keys: List[Dict], cumulative_lengths: np.ndarray,
+                               use_actual_length: bool = False) -> np.ndarray:
         """
         新規追加特徴量（12次元）を計算
+        
+        Args:
+            use_actual_length: Trueの場合、trajectory_dataの実際の長さを使用（可変長モード）
+                               Falseの場合、self.sequence_lengthを使用（固定長モード）
         
         Returns:
             new_features: 12次元の新規特徴量配列
         """
         # 1. elapsed_time: 軌跡開始からの経過時間（正規化）
-        # 可変長対応: trajectory_dataの長さを使用
-        actual_length = len(trajectory_data)
-        elapsed_time = i / actual_length if actual_length > 0 else 0.0
+        if use_actual_length:
+            # 可変長対応: trajectory_dataの実際の長さを使用
+            actual_length = len(trajectory_data)
+            elapsed_time = i / actual_length if actual_length > 0 else 0.0
+        else:
+            # 固定長モード: sequence_lengthを使用
+            elapsed_time = i / self.sequence_length if self.sequence_length > 0 else 0.0
         
         # 2. target_angle: 最近傍キーへの角度
         target_angle = 0.0

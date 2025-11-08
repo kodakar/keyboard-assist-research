@@ -18,8 +18,9 @@ from sklearn.metrics import accuracy_score, confusion_matrix, classification_rep
 # プロジェクトルートをパスに追加
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from src.processing.data_loader import KeyboardIntentDataset
+from src.processing.data_loader import KeyboardIntentDataset, create_data_loaders, variable_length_collate_fn
 from src.processing.models.hand_lstm import BasicHandLSTM
+from src.processing.models.hand_models import create_model
 from torch.utils.data import DataLoader
 from config.feature_config import get_feature_dim
 
@@ -60,34 +61,37 @@ def evaluate_on_testset(model_path: str, data_dir: str,
     os.makedirs(output_dir, exist_ok=True)
     
     try:
+        # 0. モデル設定を読み込み（可変長対応かどうかを確認）
+        checkpoint = torch.load(model_path, map_location='cpu')
+        model_config = checkpoint.get('model_config', {})
+        use_variable_length = model_config.get('use_variable_length', False)
+        
         # 1. テストデータセットの作成
         print("\n📊 テストデータセットを作成中...")
-        test_dataset = KeyboardIntentDataset(
+        print(f"   可変長対応: {'有効' if use_variable_length else '無効'}")
+        
+        # データローダーを作成（可変長対応）
+        _, _, test_loader = create_data_loaders(
             data_dir=data_dir,
-            sequence_length=60,
-            split_mode='test',  # testモード
+            batch_size=32,
             train_ratio=0.6,
             val_ratio=0.2,
             test_ratio=0.2,
-            augment=False  # テスト時は拡張なし
+            augment=False,
+            use_variable_length=use_variable_length
         )
+        
+        test_dataset = test_loader.dataset
         
         if len(test_dataset) == 0:
             print("❌ テストデータが存在しません")
             return False
         
-        test_loader = DataLoader(
-            test_dataset,
-            batch_size=32,
-            shuffle=False,
-            num_workers=0
-        )
-        
         print(f"✅ テストデータセット作成完了: {len(test_dataset)} サンプル")
         
-        # 2. モデルの読み込み
+        # 2. モデルの読み込み（チェックポイントを再利用）
         print("\n🤖 モデルを読み込み中...")
-        model = load_model(model_path)
+        model = load_model_from_checkpoint(checkpoint, model_config)
         if model is None:
             return False
         
@@ -105,16 +109,24 @@ def evaluate_on_testset(model_path: str, data_dir: str,
         all_probs = []
         
         with torch.no_grad():
-            for batch_idx, (features, labels) in enumerate(test_loader):
+            for batch_idx, batch in enumerate(test_loader):
                 if batch_idx % 10 == 0:
                     print(f"   バッチ {batch_idx + 1}/{len(test_loader)}")
+                
+                # 可変長対応：batchは(features, labels)または(features, labels, lengths)
+                if use_variable_length:
+                    features, labels, lengths = batch
+                    lengths = lengths.to(device)
+                else:
+                    features, labels = batch
+                    lengths = None
                 
                 # デバイスに移動
                 features = features.to(device)
                 labels = labels.to(device)
                 
                 # 順伝播
-                outputs = model(features)
+                outputs = model(features, lengths)
                 probabilities = torch.softmax(outputs, dim=1)
                 
                 # Top-1予測
@@ -151,18 +163,47 @@ def evaluate_on_testset(model_path: str, data_dir: str,
 
 
 def load_model(model_path: str):
-    """学習済みモデルの読み込み"""
+    """学習済みモデルの読み込み（ファイルパスから）"""
     try:
-        # チェックポイント読み込み
         checkpoint = torch.load(model_path, map_location='cpu')
         model_config = checkpoint.get('model_config', {})
+        return load_model_from_checkpoint(checkpoint, model_config)
+    except Exception as e:
+        print(f"❌ モデル読み込みエラー: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
+
+
+def load_model_from_checkpoint(checkpoint: dict, model_config: dict):
+    """チェックポイントからモデルを読み込み"""
+    try:
+        input_size = model_config.get('input_size', get_feature_dim())
+        hidden_size = model_config.get('hidden_size', 128)
+        num_classes = model_config.get('num_classes', 37)
+        model_type = model_config.get('model_type', 'lstm')
         
-        # モデル初期化
-        model = BasicHandLSTM(
-            input_size=model_config.get('input_size', get_feature_dim()),
-            hidden_size=model_config.get('hidden_size', 128),
-            num_classes=model_config.get('num_classes', 37)
-        )
+        # モデル初期化（可変長対応モデルに対応）
+        if model_type in ['cnn', 'gru', 'lstm', 'tcn']:
+            # 新しいモデル構造
+            model_params = {
+                'model_type': model_type,
+                'input_size': input_size,
+                'num_classes': num_classes
+            }
+            
+            # GRU/LSTMのみhidden_sizeパラメータを追加
+            if model_type in ['gru', 'lstm']:
+                model_params['hidden_size'] = hidden_size
+            
+            model = create_model(**model_params)
+        else:
+            # 古いモデル（後方互換性）
+            model = BasicHandLSTM(
+                input_size=input_size,
+                hidden_size=hidden_size,
+                num_classes=num_classes
+            )
         
         # 重み読み込み
         model.load_state_dict(checkpoint['model_state_dict'])
@@ -171,6 +212,8 @@ def load_model(model_path: str):
         
     except Exception as e:
         print(f"❌ モデル読み込みエラー: {e}")
+        import traceback
+        traceback.print_exc()
         return None
 
 
