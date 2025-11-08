@@ -27,7 +27,7 @@ from src.processing.enhanced_data_collector import EnhancedDataCollector
 class TrainingDataCollector:
     """学習用データ収集クラス"""
     
-    def __init__(self, user_id: str, session_text: str, repetitions: int):
+    def __init__(self, user_id: str, session_text: str, repetitions: int, use_variable_length: bool = True):
         """
         データ収集クラスの初期化
         
@@ -35,10 +35,12 @@ class TrainingDataCollector:
             user_id: ユーザーID
             session_text: 入力してもらうテキスト
             repetitions: 繰り返し回数
+            use_variable_length: 可変長モデル用にデータ収集するか（True: 各キー独立、False: スライディング方式）
         """
         self.user_id = user_id
         self.session_text = session_text
         self.repetitions = repetitions
+        self.use_variable_length = use_variable_length
         
         # セッション情報
         self.current_repetition = 0
@@ -65,6 +67,7 @@ class TrainingDataCollector:
         print(f"   User ID: {user_id}")
         print(f"   Target Text: {session_text}")
         print(f"   Repetitions: {repetitions}")
+        print(f"   可変長モード: {'有効' if use_variable_length else '無効（固定長）'}")
         print(f"   Session Directory: {self.session_dir}")
     
     def _create_session_directory(self) -> str:
@@ -461,9 +464,13 @@ class TrainingDataCollector:
         # サンプルを保存
         self._save_sample(sample_data, target_key)
         
-        # バッファをクリア（可変長対応：次のキーの軌跡を独立させる）
-        self.data_collector.trajectory_buffer.clear()
-        print(f"   🔄 バッファクリア（次のキーの軌跡を新規収集）")
+        # キー確定後の処理（モデルタイプに応じて）
+        if self.use_variable_length:
+            # 可変長モデル: バッファクリア（各キー独立）
+            self.data_collector.trajectory_buffer.clear()
+            print(f"   🔄 バッファクリア（可変長モード：次のキーの軌跡を独立収集）")
+        # else:
+        #     固定長モデル: スライディング方式（クリアしない）
         
         # 次の文字に進む
         self.current_char_index += 1
@@ -604,6 +611,10 @@ def main():
     parser.add_argument('--user-id', default='user_001', help='ユーザーID (default: user_001)')
     parser.add_argument('--session-text', default='hello world', help='入力してもらうテキスト (default: "hello world")')
     parser.add_argument('--repetitions', type=int, default=10, help='繰り返し回数 (default: 10)')
+    parser.add_argument('--variable-length', action='store_true', default=True, 
+                       help='可変長モデル用にデータ収集（各キー独立）。無効化するには--no-variable-lengthを使用')
+    parser.add_argument('--no-variable-length', dest='variable_length', action='store_false',
+                       help='固定長モデル用にデータ収集（スライディング方式）')
     
     args = parser.parse_args()
     
@@ -611,7 +622,8 @@ def main():
     collector = TrainingDataCollector(
         user_id=args.user_id,
         session_text=args.session_text,
-        repetitions=args.repetitions
+        repetitions=args.repetitions,
+        use_variable_length=args.variable_length
     )
     
     # コンポーネントの初期化

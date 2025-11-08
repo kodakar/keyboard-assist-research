@@ -321,8 +321,8 @@ class EvaluationMode:
             # テンソルに変換
             features_tensor = torch.FloatTensor(features_np).unsqueeze(0).to(self.device)
             
-            # 実際の系列長を取得（可変長対応）
-            actual_length = features_tensor.shape[1]
+            # 実際の系列長を取得（可変長対応：バッファから）
+            actual_length = len(self.trajectory_buffer)
             lengths = torch.tensor([actual_length]).to(self.device)
             
             with torch.no_grad():
@@ -512,6 +512,19 @@ class EvaluationMode:
                         top3_str = " Top3: [なし]"
                     
                     print(f"   Target: {target_char} | Actual: {actual_input} | Predict: {top1_key}({top1_prob:.0f}%) ({'✓' if is_correct else '✗'}) [{input_time:.2f}s]{top3_str}")
+                    
+                    # キー確定後の処理（モデルタイプに応じて）
+                    if self.use_variable_length:
+                        # 可変長モデル: バッファクリア（各キー独立）
+                        self.trajectory_buffer.clear()
+                        self.current_prediction = None
+                        self.prediction_ready_time = None  # 次の文字の予測準備時間をリセット
+                    # else:
+                    #     固定長モデル: スライディング方式（クリアしない）
+                    #     prediction_ready_timeのみリセット
+                    else:
+                        # 固定長モデルでも次の文字の予測準備時間はリセット
+                        self.prediction_ready_time = None
                     
                     char_idx += 1
                 

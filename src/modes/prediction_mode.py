@@ -309,8 +309,8 @@ class PredictionMode:
             # テンソルに変換
             features_tensor = torch.FloatTensor(features_np).unsqueeze(0).to(self.device)
             
-            # 実際の系列長を取得（可変長対応）
-            actual_length = features_tensor.shape[1]
+            # 実際の系列長を取得（可変長対応：バッファから）
+            actual_length = len(self.trajectory_buffer)
             lengths = torch.tensor([actual_length]).to(self.device)
             
             # 推論時間の計測
@@ -385,6 +385,14 @@ class PredictionMode:
                             self.last_predicted_topk = list(self.current_prediction[:3])
                         else:
                             self.last_predicted_topk = None
+                        
+                        # キー確定後の処理（モデルタイプに応じて）
+                        if self.use_variable_length:
+                            # 可変長モデル: バッファクリア（各キー独立）
+                            self.trajectory_buffer.clear()
+                            self.current_prediction = None
+                        # else:
+                        #     固定長モデル: スライディング方式（クリアしない）
                 
                 # FPS計算は無効化（デバッグ機能削除に伴い）
         
