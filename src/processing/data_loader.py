@@ -41,13 +41,13 @@ class KeyboardIntentDataset(Dataset):
                  split_mode: str = 'train', train_ratio: float = 0.6, 
                  val_ratio: float = 0.2, test_ratio: float = 0.2,
                  augment: bool = False, noise_std: float = 0.01,
-                 random_seed: int = 42):
+                 random_seed: int = 42, use_variable_length: bool = False):
         """
         データセットの初期化
         
         Args:
             data_dir: データディレクトリのパス
-            sequence_length: 時系列データの長さ（フレーム数）
+            sequence_length: 時系列データの長さ（フレーム数、可変長モードでは最大値）
             split_mode: データ分割モード ('train', 'val', 'test')
             train_ratio: 訓練データの割合
             val_ratio: 検証データの割合
@@ -55,10 +55,15 @@ class KeyboardIntentDataset(Dataset):
             augment: データ拡張を行うかどうか
             noise_std: ガウシアンノイズの標準偏差
             random_seed: 乱数シード
+            use_variable_length: 可変長対応を使うかどうか
         """
         self.data_dir = data_dir
         # 設定ファイルから値を取得（引数で上書き可能）
-        self.sequence_length = sequence_length or get_sequence_length()
+        # 可変長モードでは最大値（90）をsequence_lengthとして使用
+        if use_variable_length:
+            self.sequence_length = sequence_length or 90  # 可変長モード: 最大90フレーム
+        else:
+            self.sequence_length = sequence_length or get_sequence_length()
         self.split_mode = split_mode
         self.train_ratio = train_ratio
         self.val_ratio = val_ratio
@@ -66,6 +71,7 @@ class KeyboardIntentDataset(Dataset):
         self.augment = augment
         self.noise_std = noise_std
         self.random_seed = random_seed
+        self.use_variable_length = use_variable_length
         
         # ★ 追加: train属性を設定
         self.train = (split_mode == 'train')
@@ -94,10 +100,11 @@ class KeyboardIntentDataset(Dataset):
         print(f"   データディレクトリ: {data_dir}")
         print(f"   サンプル数: {len(self.samples)}")
         print(f"   特徴量次元: {self.feature_dim}")
-        print(f"   時系列長: {sequence_length}")
+        print(f"   時系列長: {self.sequence_length} ({'可変長' if use_variable_length else '固定長'})")
         print(f"   クラス数: {self.num_classes}")
         print(f"   モード: {self.split_mode}")
         print(f"   データ拡張: {'有効' if augment else '無効'}")
+        print(f"   可変長対応: {'有効' if use_variable_length else '無効'}")
     
     def _load_data_files(self) -> List[Dict]:
         """データディレクトリから全JSONファイルを読み込み"""
@@ -289,7 +296,7 @@ class KeyboardIntentDataset(Dataset):
             idx: サンプルのインデックス
             
         Returns:
-            features: 特徴量テンソル (sequence_length, feature_dim)
+            features: 特徴量テンソル (actual_length, feature_dim) 可変長モード or (sequence_length, feature_dim) 固定長モード
             label: ラベル（0-36の整数）
         """
         sample = self.samples[idx]
@@ -299,19 +306,40 @@ class KeyboardIntentDataset(Dataset):
         if not self.feature_extractor:
             self.feature_extractor = FeatureExtractor(sequence_length=self.sequence_length)
         
-        # 軌跡データの長さを統一
-        trajectory = self._normalize_trajectory_length(trajectory)
+        # 可変長モードか固定長モードかで処理を分岐
+        if self.use_variable_length:
+            # 可変長モード: 軌跡データをそのまま使用（正規化しない）
+            # ただし、最低5フレームは必要
+            if len(trajectory) < 5:
+                # 5フレーム未満の場合は最後のフレームを繰り返して5フレームにする
+                if trajectory:
+                    last_frame = trajectory[-1]
+                    while len(trajectory) < 5:
+                        trajectory.append(last_frame)
+                else:
+                    # 空の場合はダミーデータを作成
+                    trajectory = [{}] * 5
+            
+            # 可変長特徴量を抽出（実際の長さで）
+            features_np = self.feature_extractor.extract_from_trajectory_variable_length(trajectory)
+        else:
+            # 固定長モード: 軌跡データの長さを統一
+            trajectory = self._normalize_trajectory_length(trajectory)
+            features_np = self.feature_extractor.extract_from_trajectory(trajectory)
         
-        features_np = self.feature_extractor.extract_from_trajectory(trajectory)
         features = torch.FloatTensor(features_np)
         
         # ラベルを取得
         target_char = sample.get('target_char', '').lower()
         label = self.key_to_index(target_char)
         
-        # データ拡張（訓練時のみ）
-        if self.train and self.augment:
+        # データ拡張（訓練時のみ、可変長モードでは慎重に）
+        if self.train and self.augment and not self.use_variable_length:
+            # 固定長モードのみデータ拡張を適用
             features = self._augment_features(features)
+        elif self.train and self.augment and self.use_variable_length:
+            # 可変長モードでは軽量な拡張のみ（形状を変えない）
+            features = self._augment_features_variable_length(features)
         
         return features, label
     
@@ -362,6 +390,26 @@ class KeyboardIntentDataset(Dataset):
         # 形状の保証
         assert features.shape == (self.sequence_length, self.feature_dim), \
             f"データ拡張後の形状が不正: {features.shape}, 期待: ({self.sequence_length}, {self.feature_dim})"
+        
+        return features
+    
+    def _augment_features_variable_length(self, features: torch.FloatTensor) -> torch.FloatTensor:
+        """可変長特徴量のデータ拡張（形状を変えない軽量版）"""
+        features = features.clone()
+        actual_length = features.shape[0]
+        
+        # ガウシアンノイズの追加（軽量）
+        noise = torch.randn_like(features) * (self.noise_std * 0.5)  # ノイズを半分に
+        features = features + noise
+        
+        # 座標の微小な平行移動（10%の確率、可変長では控えめに）
+        if random.random() < 0.1:
+            shift = torch.randn(2) * 0.005  # より小さな移動
+            features[:, :2] = features[:, :2] + shift.unsqueeze(0)
+        
+        # 形状の保証（可変長なので、実際の長さを保持）
+        assert features.shape[0] == actual_length, \
+            f"データ拡張後の長さが変更されました: {features.shape[0]}, 期待: {actual_length}"
         
         return features
     
@@ -536,7 +584,8 @@ def create_data_loaders(data_dir: str, batch_size: int = 32,
         val_ratio=val_ratio,
         test_ratio=test_ratio,
         augment=augment,
-        random_seed=random_seed
+        random_seed=random_seed,
+        use_variable_length=use_variable_length
     )
     
     # 検証データセット
@@ -548,7 +597,8 @@ def create_data_loaders(data_dir: str, batch_size: int = 32,
         val_ratio=val_ratio,
         test_ratio=test_ratio,
         augment=False,  # 検証時は拡張なし
-        random_seed=random_seed
+        random_seed=random_seed,
+        use_variable_length=use_variable_length
     )
     
     # テストデータセット
@@ -560,7 +610,8 @@ def create_data_loaders(data_dir: str, batch_size: int = 32,
         val_ratio=val_ratio,
         test_ratio=test_ratio,
         augment=False,  # テスト時は拡張なし
-        random_seed=random_seed
+        random_seed=random_seed,
+        use_variable_length=use_variable_length
     )
     
     # collate_fnの選択
