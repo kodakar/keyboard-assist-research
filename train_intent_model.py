@@ -26,14 +26,16 @@ from sklearn.metrics import confusion_matrix, classification_report
 import sys
 sys.path.append('src')
 from src.processing.data_loader import create_data_loaders, KeyboardIntentDataset
-from src.processing.models.hand_lstm import BasicHandLSTM
+# BasicHandLSTMは使用しない（HandLSTMを使用）
+from src.processing.models.hand_models import create_model, get_model_info
 
 
 class IntentModelTrainer:
     """意図推定モデルの学習クラス"""
     
     def __init__(self, data_dir: str, epochs: int = 100, batch_size: int = 32,
-                 learning_rate: float = 0.001, model_save_path: str = None):
+                 learning_rate: float = 0.001, model_save_path: str = None,
+                 model_type: str = 'lstm', use_variable_length: bool = False):
         """
         学習クラスの初期化
         
@@ -43,11 +45,15 @@ class IntentModelTrainer:
             batch_size: バッチサイズ
             learning_rate: 学習率
             model_save_path: モデル保存先パス
+            model_type: モデルタイプ ('cnn', 'gru', 'lstm', 'tcn')
+            use_variable_length: 可変長対応を使うかどうか
         """
         self.data_dir = data_dir
         self.epochs = epochs
         self.batch_size = batch_size
         self.learning_rate = learning_rate
+        self.model_type = model_type
+        self.use_variable_length = use_variable_length
         
         # モデル保存先の設定
         if model_save_path is None:
@@ -104,7 +110,8 @@ class IntentModelTrainer:
                 data_dir=self.data_dir,
                 batch_size=self.batch_size,
                 augment=True,
-                num_workers=0
+                num_workers=0,
+                use_variable_length=self.use_variable_length
             )
             
             if len(self.train_loader) == 0:
@@ -144,11 +151,26 @@ class IntentModelTrainer:
             train_dataset = self.train_loader.dataset
             
             # モデルの初期化
-            self.model = BasicHandLSTM(
-                input_size=train_dataset.feature_dim,
-                hidden_size=128,
-                num_classes=train_dataset.num_classes
-            ).to(self.device)
+            print(f"   モデルタイプ: {self.model_type.upper()}")
+            print(f"   可変長対応: {'有効' if self.use_variable_length else '無効'}")
+            
+            # モデルタイプによってパラメータを変える
+            model_params = {
+                'model_type': self.model_type,
+                'input_size': train_dataset.feature_dim,
+                'num_classes': train_dataset.num_classes
+            }
+            
+            # GRU/LSTMのみhidden_sizeパラメータを追加
+            if self.model_type in ['gru', 'lstm']:
+                model_params['hidden_size'] = 128
+            
+            self.model = create_model(**model_params).to(self.device)
+            
+            # モデル情報を表示
+            model_info = get_model_info(self.model_type)
+            if model_info:
+                print(f"   {model_info['name']}: {model_info['description']}")
             
             # モデルパラメータ数の計算
             total_params = sum(p.numel() for p in self.model.parameters())
@@ -189,7 +211,15 @@ class IntentModelTrainer:
         # プログレスバーの表示
         num_batches = len(self.train_loader)
         
-        for batch_idx, (features, labels) in enumerate(self.train_loader):
+        for batch_idx, batch in enumerate(self.train_loader):
+            # 可変長対応：batchは(features, labels)または(features, labels, lengths)
+            if self.use_variable_length:
+                features, labels, lengths = batch
+                lengths = lengths.to(self.device)
+            else:
+                features, labels = batch
+                lengths = None
+            
             # データをデバイスに移動
             features = features.to(self.device)
             labels = labels.to(self.device)
@@ -198,7 +228,7 @@ class IntentModelTrainer:
             self.optimizer.zero_grad()
             
             # 順伝播
-            outputs = self.model(features)
+            outputs = self.model(features, lengths)
             loss = self.criterion(outputs, labels)
             
             # 逆伝播
@@ -252,13 +282,21 @@ class IntentModelTrainer:
         all_labels = []
         
         with torch.no_grad():
-            for features, labels in self.val_loader:
+            for batch in self.val_loader:
+                # 可変長対応：batchは(features, labels)または(features, labels, lengths)
+                if self.use_variable_length:
+                    features, labels, lengths = batch
+                    lengths = lengths.to(self.device)
+                else:
+                    features, labels = batch
+                    lengths = None
+                
                 # データをデバイスに移動
                 features = features.to(self.device)
                 labels = labels.to(self.device)
                 
                 # 順伝播
-                outputs = self.model(features)
+                outputs = self.model(features, lengths)
                 loss = self.criterion(outputs, labels)
                 
                 # 統計情報の更新
@@ -401,11 +439,20 @@ class IntentModelTrainer:
         all_labels = []
         
         with torch.no_grad():
-            for batch_idx, (data, target) in enumerate(self.test_loader):
-                if torch.cuda.is_available():
-                    data, target = data.cuda(), target.cuda()
+            for batch_idx, batch in enumerate(self.test_loader):
+                # 可変長対応：batchは(data, target)または(data, target, lengths)
+                if self.use_variable_length:
+                    data, target, lengths = batch
+                    lengths = lengths.to(self.device)
+                else:
+                    data, target = batch
+                    lengths = None
                 
-                output = self.model(data)
+                # データをデバイスに移動（他のメソッドと一貫性を保つ）
+                data = data.to(self.device)
+                target = target.to(self.device)
+                
+                output = self.model(data, lengths)
                 loss = self.criterion(output, target)
                 test_loss += loss.item()
                 
@@ -472,6 +519,8 @@ class IntentModelTrainer:
             'train_top3_accuracies': self.train_top3_accuracies,
             'val_top3_accuracies': self.val_top3_accuracies,
             'model_config': {
+                'model_type': self.model_type,
+                'use_variable_length': self.use_variable_length,
                 'input_size': train_dataset.feature_dim,
                 'hidden_size': 128,
                 'num_classes': train_dataset.num_classes,
@@ -637,6 +686,10 @@ def main():
                        help='学習率 (default: 0.001)')
     parser.add_argument('--model-save-path', default=None, 
                        help='モデル保存先パス (default: auto-generated)')
+    parser.add_argument('--model-type', default='lstm', choices=['cnn', 'gru', 'lstm', 'tcn'],
+                       help='モデルタイプ (default: lstm)')
+    parser.add_argument('--variable-length', action='store_true',
+                       help='可変長対応を有効にする')
     
     args = parser.parse_args()
     
@@ -655,7 +708,9 @@ def main():
         epochs=args.epochs,
         batch_size=args.batch_size,
         learning_rate=args.learning_rate,
-        model_save_path=args.model_save_path
+        model_save_path=args.model_save_path,
+        model_type=args.model_type,
+        use_variable_length=args.variable_length
     )
     
     # 学習の実行

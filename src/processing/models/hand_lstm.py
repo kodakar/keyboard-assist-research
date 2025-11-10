@@ -73,16 +73,21 @@ class BasicHandLSTM(nn.Module):
             'created_at': datetime.now().isoformat()
         }
     
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, lengths=None) -> torch.Tensor:
         """
         順伝播
         
         Args:
             x: 入力テンソル (batch_size, sequence_length, input_size)
+            lengths: 各系列の実際の長さ (batch_size,) - オプショナル（後方互換性のため）
+                  可変長対応はしていないが、lengthsパラメータを受け取ることで新しいモデルと互換性を保つ
         
         Returns:
             出力テンソル (batch_size, num_classes)
         """
+        # 注意: BasicHandLSTMは固定長のみ対応
+        # lengthsは無視される（後方互換性のためパラメータとして受け取る）
+        
         # LSTMの出力を取得
         lstm_out, (hidden, cell) = self.lstm(x)
         

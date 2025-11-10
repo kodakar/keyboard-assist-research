@@ -39,6 +39,7 @@ class FeatureImportanceAnalyzer:
         self.test_loader = None
         self.feature_names = []
         self.feature_dim = 0
+        self.use_variable_length = False  # 可変長対応フラグ
         
         print(f"[INFO] 特徴量重要度分析を初期化")
         print(f"   モデルパス: {model_path}")
@@ -56,25 +57,40 @@ class FeatureImportanceAnalyzer:
         # モデルを読み込み
         checkpoint = torch.load(self.model_path, map_location='cpu')
         
+        # モデル設定を読み込み（可変長対応かどうかを確認）
+        model_config = checkpoint.get('model_config', {})
+        self.use_variable_length = model_config.get('use_variable_length', False)
+        model_type = model_config.get('model_type', 'lstm')
+        
         # モデルの構造を確認
         if 'model_state_dict' in checkpoint:
             # 学習済みモデルの場合
             model_state = checkpoint['model_state_dict']
-            # LSTMの入力サイズを取得
-            lstm_weight_key = None
-            for key in model_state.keys():
-                if 'lstm.weight_ih_l0' in key:
-                    lstm_weight_key = key
-                    break
-            
-            if lstm_weight_key:
-                # LSTMの入力重みから入力サイズを取得
-                lstm_input_weight = model_state[lstm_weight_key]
-                self.feature_dim = lstm_input_weight.shape[1]
+            # 入力サイズを取得（model_configから、または重みから）
+            if 'input_size' in model_config:
+                self.feature_dim = model_config['input_size']
             else:
-                raise ValueError("LSTMの入力重みが見つかりません")
+                # LSTMの入力サイズを取得（後方互換性）
+                lstm_weight_key = None
+                for key in model_state.keys():
+                    if 'lstm.weight_ih_l0' in key or 'gru.weight_ih_l0' in key:
+                        lstm_weight_key = key
+                        break
+                
+                if lstm_weight_key:
+                    lstm_input_weight = model_state[lstm_weight_key]
+                    self.feature_dim = lstm_input_weight.shape[1]
+                else:
+                    # CNN/TCNの場合
+                    for key in model_state.keys():
+                        if 'conv1.weight' in key or 'network.0.conv1.weight' in key:
+                            conv_weight = model_state[key]
+                            self.feature_dim = conv_weight.shape[1]
+                            break
+                    else:
+                        raise ValueError("モデルの入力サイズを検出できません")
         else:
-            # 直接モデル状態の場合
+            # 直接モデル状態の場合（後方互換性）
             lstm_weight_key = None
             for key in checkpoint.keys():
                 if 'lstm.weight_ih_l0' in key:
@@ -93,29 +109,48 @@ class FeatureImportanceAnalyzer:
         else:
             model_state = checkpoint
         
-        # LSTMの隠れ層サイズを自動検出
-        lstm_hidden_key = None
-        for key in model_state.keys():
-            if 'lstm.weight_hh_l0' in key:
-                lstm_hidden_key = key
-                break
-        
-        if lstm_hidden_key:
-            lstm_hidden_weight = model_state[lstm_hidden_key]
-            hidden_size = lstm_hidden_weight.shape[1]  # 隠れ層サイズ
+        # モデルタイプに応じてモデルを作成
+        if model_type in ['cnn', 'gru', 'lstm', 'tcn']:
+            # 新しいモデル構造（可変長対応）
+            from src.processing.models.hand_models import create_model
+            input_size = model_config.get('input_size', self.feature_dim)
+            hidden_size = model_config.get('hidden_size', 128)
+            num_classes = model_config.get('num_classes', 37)
+            
+            model_params = {
+                'model_type': model_type,
+                'input_size': input_size,
+                'num_classes': num_classes
+            }
+            
+            if model_type in ['gru', 'lstm']:
+                model_params['hidden_size'] = hidden_size
+            
+            self.model = create_model(**model_params)
         else:
-            hidden_size = 64  # デフォルト値
-        
-        print(f"   検出された隠れ層サイズ: {hidden_size}")
-        
-        # モデルインスタンスを作成
-        self.model = BasicHandLSTM(
-            input_size=self.feature_dim,
-            hidden_size=hidden_size,
-            num_layers=2,
-            num_classes=37,
-            dropout=0.2
-        )
+            # 古いモデル（BasicHandLSTM）- 後方互換性
+            # LSTMの隠れ層サイズを自動検出
+            lstm_hidden_key = None
+            for key in model_state.keys():
+                if 'lstm.weight_hh_l0' in key:
+                    lstm_hidden_key = key
+                    break
+            
+            if lstm_hidden_key:
+                lstm_hidden_weight = model_state[lstm_hidden_key]
+                hidden_size = lstm_hidden_weight.shape[1]
+            else:
+                hidden_size = 64  # デフォルト値
+            
+            print(f"   検出された隠れ層サイズ: {hidden_size}")
+            
+            self.model = BasicHandLSTM(
+                input_size=self.feature_dim,
+                hidden_size=hidden_size,
+                num_layers=2,
+                num_classes=37,
+                dropout=0.2
+            )
         
         # モデルに重みを読み込み
         if 'model_state_dict' in checkpoint:
@@ -126,6 +161,8 @@ class FeatureImportanceAnalyzer:
         self.model.eval()
         
         print(f"[OK] モデル読み込み完了")
+        print(f"   モデルタイプ: {model_type}")
+        print(f"   可変長対応: {'有効' if self.use_variable_length else '無効'}")
         print(f"   特徴量次元数: {self.feature_dim}")
         
         # 特徴量名を自動設定
@@ -163,11 +200,14 @@ class FeatureImportanceAnalyzer:
     def load_test_data(self):
         """テストデータを読み込み"""
         print(f"[INFO] テストデータを読み込み中...")
+        print(f"   可変長対応: {'有効' if self.use_variable_length else '無効'}")
         
         try:
             train_loader, val_loader, test_loader = create_data_loaders(
                 self.data_dir, 
-                batch_size=32
+                batch_size=32,
+                augment=False,  # 分析時は拡張なし
+                use_variable_length=self.use_variable_length  # 可変長対応
             )
             self.test_loader = test_loader
             
@@ -183,10 +223,23 @@ class FeatureImportanceAnalyzer:
         
         all_predictions = []
         all_labels = []
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.model = self.model.to(device)
         
         with torch.no_grad():
-            for features, labels in self.test_loader:
-                outputs = self.model(features)
+            for batch in self.test_loader:
+                # 可変長対応：batchは(features, labels)または(features, labels, lengths)
+                if self.use_variable_length:
+                    features, labels, lengths = batch
+                    lengths = lengths.to(device)
+                else:
+                    features, labels = batch
+                    lengths = None
+                
+                features = features.to(device)
+                labels = labels.to(device)
+                
+                outputs = self.model(features, lengths)
                 predictions = torch.argmax(outputs, dim=1)
                 
                 all_predictions.extend(predictions.cpu().numpy())

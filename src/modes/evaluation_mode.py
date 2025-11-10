@@ -24,7 +24,8 @@ from src.core.hand_tracker import HandTracker
 from src.input.keyboard_map import KeyboardMap
 from src.input.keyboard_tracker import KeyboardTracker
 from src.processing.coordinate_transformer import WorkAreaTransformer
-from src.processing.models.hand_lstm import BasicHandLSTM
+from src.processing.models.hand_models import HandLSTM
+from src.processing.models.hand_models import create_model
 from src.processing.feature_extractor import FeatureExtractor
 
 
@@ -52,7 +53,7 @@ class EvaluationMode:
         self.model = None
         
         # 予測用のバッファ（学習システムと統一）
-        self.trajectory_buffer = deque(maxlen=60)  # 60フレーム分の軌跡データ
+        self.trajectory_buffer = deque(maxlen=90)  # 可変長対応：最大90フレーム
         
         # 予測結果
         self.current_prediction = None
@@ -61,8 +62,12 @@ class EvaluationMode:
         self.KEY_CHARS = None
         self.label_map_loaded = False
         
+        # モデル設定（load_modelで設定される）
+        self.min_frames = 60  # デフォルト値（固定長モデル用）
+        self.use_variable_length = False
+        
         # 特徴量抽出器（学習システムと統一）
-        self.feature_extractor = FeatureExtractor(sequence_length=60, fps=30.0)
+        self.feature_extractor = FeatureExtractor(sequence_length=90, fps=30.0)
         
         # 評価ログ
         self.evaluation_log = []
@@ -196,12 +201,41 @@ class EvaluationMode:
             else:
                 self.label_map_loaded = True
 
-            # モデルの初期化
-            self.model = BasicHandLSTM(
-                input_size=input_size,
-                hidden_size=hidden_size,
-                num_classes=num_classes
-            )
+            # モデルタイプの取得（デフォルトはlstm）
+            model_type = model_config.get('model_type', 'lstm')
+            self.use_variable_length = model_config.get('use_variable_length', False)
+            
+            # 最低フレーム数の設定
+            if self.use_variable_length:
+                self.min_frames = 5  # 可変長モデル：最低5フレーム
+            else:
+                self.min_frames = 60  # 固定長モデル：60フレーム必須
+            
+            print(f"   モデルタイプ: {model_type.upper()}")
+            print(f"   可変長対応: {'有効' if self.use_variable_length else '無効'}")
+            print(f"   最低フレーム数: {self.min_frames}")
+            
+            # モデルの初期化（model_typeに応じて）
+            if model_type in ['cnn', 'gru', 'lstm', 'tcn']:
+                # 新しいモデル構造
+                model_params = {
+                    'model_type': model_type,
+                    'input_size': input_size,
+                    'num_classes': num_classes
+                }
+                
+                # GRU/LSTMのみhidden_sizeパラメータを追加
+                if model_type in ['gru', 'lstm']:
+                    model_params['hidden_size'] = hidden_size
+                
+                self.model = create_model(**model_params)
+            else:
+                # 古いモデルタイプ名の場合、LSTMとして扱う
+                self.model = HandLSTM(
+                    input_size=input_size,
+                    hidden_size=hidden_size,
+                    num_classes=num_classes
+                )
             
             # 重みの読み込み
             self.model.load_state_dict(checkpoint['model_state_dict'])
@@ -276,18 +310,32 @@ class EvaluationMode:
     def predict_intent(self) -> Optional[List[Tuple[str, float]]]:
         """入力意図を予測"""
         try:
-            if len(self.trajectory_buffer) < 60:
+            # 最低フレーム数チェック（モデルの種類に応じて動的に変更）
+            if len(self.trajectory_buffer) < self.min_frames:
                 return None
             
             # 軌跡データを特徴量に変換（学習システムと統一）
             trajectory_data = list(self.trajectory_buffer)
-            features_np = self.feature_extractor.extract_from_trajectory(trajectory_data)
+            
+            # 可変長モードか固定長モードかで特徴量抽出方法を分岐
+            if self.use_variable_length:
+                # 可変長モード: 実際の長さで特徴量を抽出
+                features_np = self.feature_extractor.extract_from_trajectory_variable_length(trajectory_data)
+                actual_length = len(trajectory_data)
+            else:
+                # 固定長モード: 固定長で特徴量を抽出
+                features_np = self.feature_extractor.extract_from_trajectory(trajectory_data)
+                actual_length = features_np.shape[0]  # 固定長（sequence_length）
             
             # テンソルに変換
             features_tensor = torch.FloatTensor(features_np).unsqueeze(0).to(self.device)
             
+            # 実際の系列長を取得（可変長対応：バッファから）
+            lengths = torch.tensor([actual_length]).to(self.device) if self.use_variable_length else None
+            
             with torch.no_grad():
-                outputs = self.model(features_tensor)
+                # 可変長モードの場合はlengthsを渡す、固定長モードの場合はNone
+                outputs = self.model(features_tensor, lengths)
                 probabilities = torch.softmax(outputs, dim=1)
             
             # Top-3の予測結果を取得
@@ -473,6 +521,19 @@ class EvaluationMode:
                         top3_str = " Top3: [なし]"
                     
                     print(f"   Target: {target_char} | Actual: {actual_input} | Predict: {top1_key}({top1_prob:.0f}%) ({'✓' if is_correct else '✗'}) [{input_time:.2f}s]{top3_str}")
+                    
+                    # キー確定後の処理（モデルタイプに応じて）
+                    if self.use_variable_length:
+                        # 可変長モデル: バッファクリア（各キー独立）
+                        self.trajectory_buffer.clear()
+                        self.current_prediction = None
+                        self.prediction_ready_time = None  # 次の文字の予測準備時間をリセット
+                    # else:
+                    #     固定長モデル: スライディング方式（クリアしない）
+                    #     prediction_ready_timeのみリセット
+                    else:
+                        # 固定長モデルでも次の文字の予測準備時間はリセット
+                        self.prediction_ready_time = None
                     
                     char_idx += 1
                 

@@ -143,7 +143,8 @@ class FeatureExtractor:
                 # 24次元特徴量の実装（重要度の低い特徴量を削除）
                 new_features = self._calculate_new_features(
                     i, trajectory_data, idx_x, idx_y, vel_x, vel_y, acc_x, acc_y, 
-                    finger_x, finger_y, nearest_keys, cumulative_lengths
+                    finger_x, finger_y, nearest_keys, cumulative_lengths,
+                    use_actual_length=False  # 固定長モード
                 )
                 
                 # 削除する特徴量: amplitude_x, amplitude_y, elapsed_time, acc_x, acc_y, acceleration_magnitude
@@ -173,7 +174,8 @@ class FeatureExtractor:
                 # 30次元特徴量の実装
                 new_features = self._calculate_new_features(
                     i, trajectory_data, idx_x, idx_y, vel_x, vel_y, acc_x, acc_y, 
-                    finger_x, finger_y, nearest_keys, cumulative_lengths
+                    finger_x, finger_y, nearest_keys, cumulative_lengths,
+                    use_actual_length=False  # 固定長モード
                 )
                 
                 features[i] = np.concatenate([
@@ -222,17 +224,223 @@ class FeatureExtractor:
 
         return features
 
+    def extract_from_trajectory_variable_length(self, trajectory_data: List[Dict]) -> np.ndarray:
+        """
+        可変長軌跡データから特徴量を抽出（可変長対応）
+        
+        Args:
+            trajectory_data: 各フレームの辞書データのリスト（長さは可変）
+        
+        Returns:
+            features: (actual_length, feature_dim) のnumpy配列
+        """
+        actual_length = len(trajectory_data)
+        if actual_length == 0:
+            # 空の場合は最小長（5フレーム）のダミーデータを返す
+            # ダミーデータを作成
+            trajectory_data = [{}] * 5
+            actual_length = 5
+        
+        features = np.zeros((actual_length, self.feature_dim), dtype=np.float32)
+        
+        # 指先座標を先に抽出（速度/加速度計算のため）
+        idx_x = []
+        idx_y = []
+        for i in range(actual_length):
+            # 後方互換性のため両方のキー名をチェック
+            coords = trajectory_data[i].get('work_area_coords') or trajectory_data[i].get('keyboard_space_coords', {})
+            index_finger = coords.get('index_finger', {})
+            idx_x.append(float(index_finger.get('x', 0.0)))
+            idx_y.append(float(index_finger.get('y', 0.0)))
+        
+        # 速度・加速度（過去のみ参照でデータリーク防止）
+        vel_x = np.zeros(actual_length, dtype=np.float32)
+        vel_y = np.zeros(actual_length, dtype=np.float32)
+        acc_x = np.zeros(actual_length, dtype=np.float32)
+        acc_y = np.zeros(actual_length, dtype=np.float32)
+        
+        for i in range(len(idx_x)):
+            if i >= 1:
+                vel_x[i] = (idx_x[i] - idx_x[i-1]) * self.fps
+                vel_y[i] = (idx_y[i] - idx_y[i-1]) * self.fps
+            if i >= 2:
+                acc_x[i] = (idx_x[i] - 2*idx_x[i-1] + idx_x[i-2]) * (self.fps ** 2)
+                acc_y[i] = (idx_y[i] - 2*idx_y[i-1] + idx_y[i-2]) * (self.fps ** 2)
+        
+        # 累積距離を事前計算（最適化）
+        cumulative_lengths = np.zeros(actual_length, dtype=np.float32)
+        for i in range(1, actual_length):
+            if i < len(idx_x) and i < len(idx_y):
+                dx = idx_x[i] - idx_x[i-1]
+                dy = idx_y[i] - idx_y[i-1]
+                segment_length = np.sqrt(dx**2 + dy**2)
+                cumulative_lengths[i] = cumulative_lengths[i-1] + segment_length
+        
+        # 各フレームの特徴量を構築
+        for i in range(actual_length):
+            frame = trajectory_data[i]
+            
+            # 2: 指の座標（エラーハンドリング付き）
+            try:
+                finger_x = idx_x[i] if i < len(idx_x) else 0.0
+                finger_y = idx_y[i] if i < len(idx_y) else 0.0
+            except (IndexError, TypeError):
+                finger_x, finger_y = 0.0, 0.0
+            
+            # 6: 最近傍3キーへの相対座標（エラーハンドリング付き）
+            nearest_keys = frame.get('nearest_keys_relative', [])
+            rel = np.zeros(6, dtype=np.float32)
+            try:
+                for j, key_info in enumerate(nearest_keys[:3]):
+                    if isinstance(key_info, dict):
+                        rel[j*2] = float(key_info.get('relative_x', 0.0))
+                        rel[j*2+1] = float(key_info.get('relative_y', 0.0))
+            except (TypeError, ValueError, KeyError):
+                rel = np.zeros(6, dtype=np.float32)
+            
+            # 3: 最近傍3キーへの距離（エラーハンドリング付き）
+            dists = np.zeros(3, dtype=np.float32)
+            try:
+                for j, key_info in enumerate(nearest_keys[:3]):
+                    if isinstance(key_info, dict):
+                        dists[j] = float(key_info.get('distance', 0.0))
+            except (TypeError, ValueError, KeyError):
+                dists = np.zeros(3, dtype=np.float32)
+            
+            # 4: 速度(x,y), 加速度(x,y)（エラーハンドリング付き）
+            try:
+                vxa = vel_x[i] if i < len(vel_x) else 0.0
+                vya = vel_y[i] if i < len(vel_y) else 0.0
+                axa = acc_x[i] if i < len(acc_x) else 0.0
+                aya = acc_y[i] if i < len(acc_y) else 0.0
+            except (IndexError, TypeError):
+                vxa, vya, axa, aya = 0.0, 0.0, 0.0, 0.0
+            
+            # 新規追加: 3つの新しい特徴量
+            # 振幅（x方向）: 過去window_sizeフレーム分のx座標の標準偏差
+            amplitude_x = 0.0
+            window_size = get_window_size()
+            start_idx = max(0, i - (window_size - 1))
+            if i > 0:
+                past_x = idx_x[start_idx:i]
+                if len(past_x) > 0:
+                    amplitude_x = np.std(past_x) if len(past_x) > 1 else 0.0
+            
+            # 振幅（y方向）: 過去window_sizeフレーム分のy座標の標準偏差
+            amplitude_y = 0.0
+            if i > 0:
+                past_y = idx_y[start_idx:i]
+                if len(past_y) > 0:
+                    amplitude_y = np.std(past_y) if len(past_y) > 1 else 0.0
+            
+            # 方向転換の頻度: 過去window_sizeフレーム分のx方向速度の符号変化回数を正規化
+            direction_change_freq = 0.0
+            if i > 0:
+                past_vel_x = vel_x[start_idx:i]
+                direction_change_freq = self._calculate_direction_change_frequency(past_vel_x)
+            
+            # 特徴量の実装（18次元、24次元、30次元）
+            if self.feature_dim == 18:
+                # 18次元特徴量の実装
+                features[i] = np.concatenate([
+                    np.array([finger_x, finger_y], dtype=np.float32),
+                    rel,
+                    dists,
+                    np.array([vxa, vya, axa, aya], dtype=np.float32),
+                    np.array([amplitude_x, amplitude_y, direction_change_freq], dtype=np.float32),
+                ])
+            elif self.feature_dim == 24:
+                # 24次元特徴量の実装
+                new_features = self._calculate_new_features(
+                    i, trajectory_data, idx_x, idx_y, vel_x, vel_y, acc_x, acc_y,
+                    finger_x, finger_y, nearest_keys, cumulative_lengths,
+                    use_actual_length=True  # 可変長モード
+                )
+                
+                selected_new_features = np.array([
+                    new_features[1], new_features[2], new_features[3], new_features[4],
+                    new_features[6], new_features[7], new_features[8], new_features[9],
+                    new_features[10], new_features[11],
+                ], dtype=np.float32)
+                
+                features[i] = np.concatenate([
+                    np.array([finger_x, finger_y], dtype=np.float32),
+                    rel,
+                    dists,
+                    np.array([vxa, vya], dtype=np.float32),
+                    np.array([direction_change_freq], dtype=np.float32),
+                    selected_new_features
+                ])
+            else:
+                # 30次元特徴量の実装
+                new_features = self._calculate_new_features(
+                    i, trajectory_data, idx_x, idx_y, vel_x, vel_y, acc_x, acc_y,
+                    finger_x, finger_y, nearest_keys, cumulative_lengths,
+                    use_actual_length=True  # 可変長モード
+                )
+                
+                features[i] = np.concatenate([
+                    np.array([finger_x, finger_y], dtype=np.float32),
+                    rel,
+                    dists,
+                    np.array([vxa, vya, axa, aya], dtype=np.float32),
+                    np.array([amplitude_x, amplitude_y, direction_change_freq], dtype=np.float32),
+                    new_features
+                ])
+        
+        # 正規化/クリップ（設定ファイルから取得）
+        finger_coords_range = get_normalization_range('finger_coords')
+        relative_coords_range = get_normalization_range('relative_coords')
+        distances_range = get_normalization_range('distances')
+        velocity_acceleration_range = get_normalization_range('velocity_acceleration')
+        amplitude_direction_range = get_normalization_range('amplitude_direction')
+        new_features_range = get_normalization_range('new_features')
+        
+        features[:, :2] = np.clip(features[:, :2], *finger_coords_range)
+        features[:, 2:8] = np.clip(features[:, 2:8], *relative_coords_range)
+        features[:, 8:11] = np.clip(features[:, 8:11], *distances_range)
+        
+        if self.feature_dim == 18:
+            features[:, 11:15] = np.clip(features[:, 11:15], *velocity_acceleration_range)
+            features[:, 15:18] = np.clip(features[:, 15:18], *amplitude_direction_range)
+        elif self.feature_dim == 24:
+            features[:, 11:13] = np.clip(features[:, 11:13], *velocity_acceleration_range)
+            features[:, 13:14] = np.clip(features[:, 13:14], *amplitude_direction_range)
+            selected_indices = [1, 2, 3, 4, 6, 7, 8, 9, 10, 11]
+            for k, j in enumerate(selected_indices):
+                clip_range = get_new_feature_range(j)
+                features[:, 14 + k] = np.clip(features[:, 14 + k], *clip_range)
+        else:  # 30次元
+            features[:, 11:15] = np.clip(features[:, 11:15], *velocity_acceleration_range)
+            features[:, 15:18] = np.clip(features[:, 15:18], *amplitude_direction_range)
+            for j in range(18, 30):
+                clip_range = get_new_feature_range(j - 18)
+                features[:, j] = np.clip(features[:, j], *clip_range)
+        
+        return features
+
     def _calculate_new_features(self, i: int, trajectory_data: List[Dict], idx_x: List[float], idx_y: List[float], 
                                vel_x: np.ndarray, vel_y: np.ndarray, acc_x: np.ndarray, acc_y: np.ndarray,
-                               finger_x: float, finger_y: float, nearest_keys: List[Dict], cumulative_lengths: np.ndarray) -> np.ndarray:
+                               finger_x: float, finger_y: float, nearest_keys: List[Dict], cumulative_lengths: np.ndarray,
+                               use_actual_length: bool = False) -> np.ndarray:
         """
         新規追加特徴量（12次元）を計算
+        
+        Args:
+            use_actual_length: Trueの場合、trajectory_dataの実際の長さを使用（可変長モード）
+                               Falseの場合、self.sequence_lengthを使用（固定長モード）
         
         Returns:
             new_features: 12次元の新規特徴量配列
         """
         # 1. elapsed_time: 軌跡開始からの経過時間（正規化）
-        elapsed_time = i / self.sequence_length if self.sequence_length > 0 else 0.0
+        if use_actual_length:
+            # 可変長対応: trajectory_dataの実際の長さを使用
+            actual_length = len(trajectory_data)
+            elapsed_time = i / actual_length if actual_length > 0 else 0.0
+        else:
+            # 固定長モード: sequence_lengthを使用
+            elapsed_time = i / self.sequence_length if self.sequence_length > 0 else 0.0
         
         # 2. target_angle: 最近傍キーへの角度
         target_angle = 0.0
