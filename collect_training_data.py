@@ -12,7 +12,6 @@ import os
 import json
 import time
 from datetime import datetime
-from collections import deque
 import sys
 
 # 既存のモジュールをインポート
@@ -58,7 +57,7 @@ class TrainingDataCollector:
         # データ収集の状態
         self.is_collecting = False
         self.collection_start_time = None
-        self.trajectory_buffer = deque(maxlen=90)  # 可変長対応: 最大90フレーム（3秒）
+        # trajectory_bufferはEnhancedDataCollector内で管理される
         
         # セッションデータの保存先
         self.session_dir = self._create_session_directory()
@@ -159,7 +158,12 @@ class TrainingDataCollector:
             print("✅ キーボードトラッカー初期化完了")
             
             # データ収集の初期化
-            self.data_collector = EnhancedDataCollector(user_id=self.user_id)
+            # 可変長モードの場合、バッファサイズを90に設定（最大90フレーム、3秒分）
+            trajectory_buffer_size = 90 if self.use_variable_length else 60
+            self.data_collector = EnhancedDataCollector(
+                user_id=self.user_id,
+                trajectory_buffer_size=trajectory_buffer_size
+            )
             self.data_collector.set_screen_size(width, height)
             
             # 作業領域の4隅を設定

@@ -237,6 +237,8 @@ class FeatureExtractor:
         actual_length = len(trajectory_data)
         if actual_length == 0:
             # 空の場合は最小長（5フレーム）のダミーデータを返す
+            # ダミーデータを作成
+            trajectory_data = [{}] * 5
             actual_length = 5
         
         features = np.zeros((actual_length, self.feature_dim), dtype=np.float32)

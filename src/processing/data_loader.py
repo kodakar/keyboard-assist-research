@@ -15,7 +15,7 @@ import random
 from sklearn.model_selection import train_test_split
 import warnings
 import sys
-import os
+import copy
 
 # プロジェクトルートをパスに追加
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
@@ -312,10 +312,17 @@ class KeyboardIntentDataset(Dataset):
             # ただし、最低5フレームは必要
             if len(trajectory) < 5:
                 # 5フレーム未満の場合は最後のフレームを繰り返して5フレームにする
+                # 元のデータを変更しないようにコピーを作成
+                trajectory = list(trajectory)  # リストのコピーを作成
                 if trajectory:
-                    last_frame = trajectory[-1]
+                    # 最後のフレームを深くコピー（辞書の場合）
+                    last_frame = copy.deepcopy(trajectory[-1]) if isinstance(trajectory[-1], dict) else trajectory[-1]
                     while len(trajectory) < 5:
-                        trajectory.append(last_frame)
+                        # 毎回コピーを追加（参照を共有しない）
+                        if isinstance(last_frame, dict):
+                            trajectory.append(copy.deepcopy(last_frame))
+                        else:
+                            trajectory.append(last_frame)
                 else:
                     # 空の場合はダミーデータを作成
                     trajectory = [{}] * 5
@@ -520,6 +527,10 @@ def variable_length_collate_fn(batch):
         labels: ラベル (batch_size,)
         lengths: 各系列の実際の長さ (batch_size,)
     """
+    # 空のバッチのチェック
+    if len(batch) == 0:
+        raise ValueError("空のバッチが渡されました")
+    
     # 特徴量とラベルを分離
     sequences = [item[0] for item in batch]  # 各要素は (seq_len, feature_dim)
     labels = [item[1] for item in batch]      # 各要素はスカラー
@@ -528,7 +539,10 @@ def variable_length_collate_fn(batch):
     lengths = torch.tensor([len(seq) for seq in sequences], dtype=torch.long)
     
     # 最大長を取得
-    max_length = max(lengths).item()
+    if len(lengths) == 0 or lengths.max().item() == 0:
+        raise ValueError("すべての系列の長さが0です")
+    
+    max_length = lengths.max().item()
     feature_dim = sequences[0].shape[-1]
     
     # パディング

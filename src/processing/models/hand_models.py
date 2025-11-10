@@ -205,12 +205,14 @@ class HandLSTM(nn.Module):
                 x, lengths.cpu(), batch_first=True, enforce_sorted=False
             )
             _, (hidden, cell) = self.lstm(packed)
+            # 可変長の場合: 最後の隠れ状態（最上層）を使用
+            output = self.fc(hidden[-1])
         else:
-            # 固定長（後方互換）
-            _, (hidden, cell) = self.lstm(x)
-        
-        # 最後の隠れ状態（最上層）
-        output = self.fc(hidden[-1])
+            # 固定長（後方互換: BasicHandLSTMと同じ動作）
+            lstm_out, (hidden, cell) = self.lstm(x)
+            # 固定長の場合: 最後の時刻の出力を使用（BasicHandLSTMと完全に同じ）
+            last_output = lstm_out[:, -1, :]
+            output = self.fc(last_output)
         
         return output
 

@@ -26,7 +26,7 @@ from sklearn.metrics import confusion_matrix, classification_report
 import sys
 sys.path.append('src')
 from src.processing.data_loader import create_data_loaders, KeyboardIntentDataset
-from src.processing.models.hand_lstm import BasicHandLSTM
+# BasicHandLSTMは使用しない（HandLSTMを使用）
 from src.processing.models.hand_models import create_model, get_model_info
 
 
@@ -448,8 +448,9 @@ class IntentModelTrainer:
                     data, target = batch
                     lengths = None
                 
-                if torch.cuda.is_available():
-                    data, target = data.cuda(), target.cuda()
+                # データをデバイスに移動（他のメソッドと一貫性を保つ）
+                data = data.to(self.device)
+                target = target.to(self.device)
                 
                 output = self.model(data, lengths)
                 loss = self.criterion(output, target)

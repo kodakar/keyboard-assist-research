@@ -19,7 +19,7 @@ from sklearn.metrics import accuracy_score, confusion_matrix, classification_rep
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from src.processing.data_loader import KeyboardIntentDataset, create_data_loaders, variable_length_collate_fn
-from src.processing.models.hand_lstm import BasicHandLSTM
+from src.processing.models.hand_models import HandLSTM
 from src.processing.models.hand_models import create_model
 from torch.utils.data import DataLoader
 from config.feature_config import get_feature_dim
@@ -198,8 +198,8 @@ def load_model_from_checkpoint(checkpoint: dict, model_config: dict):
             
             model = create_model(**model_params)
         else:
-            # 古いモデル（後方互換性）
-            model = BasicHandLSTM(
+            # 古いモデルタイプ名の場合、LSTMとして扱う
+            model = HandLSTM(
                 input_size=input_size,
                 hidden_size=hidden_size,
                 num_classes=num_classes

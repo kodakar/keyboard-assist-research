@@ -24,7 +24,7 @@ from src.core.hand_tracker import HandTracker
 from src.input.keyboard_map import KeyboardMap
 from src.input.keyboard_tracker import KeyboardTracker
 from src.processing.coordinate_transformer import WorkAreaTransformer
-from src.processing.models.hand_lstm import BasicHandLSTM
+from src.processing.models.hand_models import HandLSTM
 from src.processing.models.hand_models import create_model
 from src.processing.feature_extractor import FeatureExtractor
 
@@ -230,8 +230,8 @@ class EvaluationMode:
                 
                 self.model = create_model(**model_params)
             else:
-                # 古いモデル（後方互換性）
-                self.model = BasicHandLSTM(
+                # 古いモデルタイプ名の場合、LSTMとして扱う
+                self.model = HandLSTM(
                     input_size=input_size,
                     hidden_size=hidden_size,
                     num_classes=num_classes
