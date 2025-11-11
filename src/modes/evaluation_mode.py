@@ -454,8 +454,9 @@ class EvaluationMode:
                 if frame_data is not None:
                     self.trajectory_buffer.append(frame_data)
                 
-                # 予測実行
-                if len(self.trajectory_buffer) >= 60:
+                # 予測実行（可変長モデルはmin_framesで開始、固定長モデルは60フレームで開始）
+                required_frames = self.min_frames if self.use_variable_length else 60
+                if len(self.trajectory_buffer) >= required_frames:
                     predictions = self.predict_intent()
                     if predictions:
                         self.current_prediction = predictions
