@@ -1,0 +1,29 @@
+# 可変長モデル用データ収集コマンド一覧
+# 生成元: generated_sequences.json（seed 0-9）
+#
+# 目的:
+# - 10種類のランダム配列を各5回収集
+# - 2日間に分割（Day 1: 1-5, Day 2: 6-10）
+# - 可変長モード (--variable-length) を明示的に使用
+#
+# 実行例:
+#   python collect_training_data.py --user-id kodaka_variable --session-text "<sequence>" --repetitions 5 --variable-length
+#
+# 注意:
+# - ダブルクォート内の文字列をそのままコピーしてください（space を含みます）
+# - 必要に応じて --session-id や --trajectory-buffer-size などを追加してください
+
+Day 1: Sequences 1-5
+python collect_training_data.py --user-id kodaka_variable --session-text "dcaswelqie43sla8jhcrdu6i95uwo1w 68kn2qf51bhfim7y02t3j r9ao8bg90v7kpv72xqd4ph0me6ogzk3rxptyznbus" --repetitions 5 --variable-length
+python collect_training_data.py --user-id kodaka_variable --session-text "xldubnfd4uwr9sjyu1h rbz2ois84o3joxqg7pz9hct ecqw60g254q3ifnm78zk0vk6a1a5peln8a3vtbyejs6xwyfmd2g" --repetitions 5 --variable-length
+python collect_training_data.py --user-id kodaka_variable --session-text "ar41y8bcghfj0f2dywc0 o82qh5oyp4uvugmg1lk tr6ozm7klxnq5j38dx5 afli9vtpx9b6nzw1sztvi3b7k4mp7iseec" --repetitions 5 --variable-length
+python collect_training_data.py --user-id kodaka_variable --session-text "qqegzwpvfendpycorb7hx2z5woqaie9gtjvnl u9fmybdj4loxkl2r4sz hwu01pci76t025it78 6km1n8a8d35y4sh13m" --repetitions 5 --variable-length
+python collect_training_data.py --user-id kodaka_variable --session-text "r46aj9019qdwyzvqwk2mcb53wmv67it1v7g4fe5yt 2lfx7soha83uch xzgn0rr8s6pikn2bln jos0zlcp1uadehxufpm" --repetitions 5 --variable-length
+
+Day 2: Sequences 6-10
+python collect_training_data.py --user-id kodaka_variable --session-text "2m21vd9 4n6zo75l yqw3kcpjgmpsobu8rjcy0vl43ikurfzqrnf9h5ex14yvadgwhe7tjoula 2f1t7xtgic9mxb068sn5" --repetitions 5 --variable-length
+python collect_training_data.py --user-id kodaka_variable --session-text "k4ffnjl0h02 gu5v9g3k96p74wddisb8rbcihkpgtwa0zozuliqxo6y8t758tcrvm5s qve923je11uj naqsx47habmyd3" --repetitions 5 --variable-length
+python collect_training_data.py --user-id kodaka_variable --session-text "4z24irtaa8xmos9sq3mfd fxgawjiyj1vsrlh6wlepb86v5j8pwxz3qtn n0m9kogb79 1kf7u05lduuebkyc2re0dc6thq" --repetitions 5 --variable-length
+python collect_training_data.py --user-id kodaka_variable --session-text "ciltan3ihan6djwpvx368k3hu vqj17gk1rer004odnemp78rfh51yvuo2bzc9qf9wtzmb 4e592ys4xwb5tjylgdcigssk" --repetitions 5 --variable-length
+python collect_training_data.py --user-id kodaka_variable --session-text "pxviyo9tx1deo45hl8t4qogk01wb5kn2m9n6ckfazlib27qea1ujx8z3vjsr07znfsd6gfcl2huvhrc 0pe3 ypa6igmr3w" --repetitions 5 --variable-length
+
