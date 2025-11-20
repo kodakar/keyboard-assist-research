@@ -1,0 +1,467 @@
+%%
+%% 研究報告用スイッチ
+%% [techrep]
+%%
+%% 欧文表記無しのスイッチ(etitle,eabstractは任意)
+%% [noauthor]
+%%
+
+%\documentclass[submit,techrep]{ipsj}
+\documentclass[submit,techrep,noauthor]{ipsj}
+
+
+
+\usepackage[dvipdfmx]{graphicx}
+\usepackage{latexsym}
+\usepackage{url}
+
+\def\Underline{\setbox0\hbox\bgroup\let\\\endUnderline}
+\def\endUnderline{\vphantom{y}\egroup\smash{\underline{\box0}}\\}
+\def\|{\verb|}
+%
+
+%\setcounter{巻数}{59}%vol59=2018
+%\setcounter{号数}{10}
+%\setcounter{page}{1}
+
+
+\begin{document}
+
+
+\title{卓上カメラによるAI指先認識を用いた\\運動機能障害者向けキーボード入力支援システムの研究}
+
+\etitle{Research on a Keyboard Input Support System for Individuals\\with Motor Disabilities Using AI Finger Recognition via a Tabletop Camera}
+
+\affiliate{IWAI}{東京電機大学 未来科学部 情報メディア学科\\
+Department of Information and Media Sciences, School of Future Sciences, Tokyo Denki University}
+
+
+\author{小高 大和}{Yamato Kodaka}{IWAI}[kodaka@example.com]
+\author{岩井 将行}{Masayuki Iwai}{IWAI}
+
+\begin{abstract}
+本稿は，運動機能障害者のキーボード入力を支援するため，カメラを用いた機械学習による入力意図推定システムを提案する．
+提案システムは，一般的なWebカメラで手の動きを認識し，MediaPipeによる手のランドマーク検出，18次元の動的特徴量抽出，
+深層学習モデル（LSTM, CNN, GRU, TCN）による時系列学習を組み合わせることで，
+震えを含む軌跡から直接的な入力意図推定を実現する．
+評価実験では，可変長軌跡データ（5-90フレーム）を用いた学習により，
+検証データで86.9\%の精度（Top-3で98.0\%）を達成し，
+リアルタイム予測においても実用レベルの性能を確認した．
+\end{abstract}
+
+
+%
+%\begin{jkeyword}
+%情報処理学会論文誌ジャーナル，\LaTeX，スタイルファイル，べからず集
+%\end{jkeyword}
+%
+%\begin{eabstract}
+%This document is a guide to prepare a draft for submitting to IPSJ
+%Journal, and the final camera-ready manuscript of a paper to appear in
+%IPSJ Journal, using {\LaTeX} and special style files.  Since this
+%document itself is produced with the style files, it will help you to
+%refer its source file which is distributed with the style files.
+%\end{eabstract}
+%
+%\begin{ekeyword}
+%IPSJ Journal, \LaTeX, style files, ``Dos and Dont's'' list
+%\end{ekeyword}
+
+\maketitle
+
+%1
+\section{はじめに}
+
+近年，デジタル技術の普及により，パソコンやスマートフォンなどの情報機器の操作が日常生活に不可欠となっている．
+しかし，脳性麻痺，本態性振戦，パーキンソン病などの神経疾患や，加齢による運動機能の低下によって手の震えや不随意運動がある人々にとって，
+キーボードでの正確な入力は大きな課題となっている．
+
+従来の入力支援技術には，音声入力や視線入力，特殊なハードウェアを用いた支援機器などがあるが，
+これらは導入コストが高い，使用環境が限られる，あるいは学習コストが高いといった問題がある．
+一方で，現在普及しているカメラ技術とコンピュータビジョンを組み合わせることで，
+追加のハードウェアなしに入力支援を実現できる可能性がある．
+
+本研究では，一般的なWebカメラを用いて手の動きを認識し，
+震えなどの不随意運動の影響を軽減しながら，ユーザの入力意図を推定するキーボード入力支援システムを提案する．
+具体的には，（1）カメラ映像からの手の動きの軌跡化，（2）震えの特性を考慮した動的特徴量の抽出，
+（3）深層学習モデルによる入力意図の推定の3つの要素技術を組み合わせることで，
+運動機能障害者のキーボード入力を支援することを目的とする．
+
+
+%2
+\section{関連研究}
+
+%2.1
+\subsection{運動機能障害者向けの入力支援技術}
+
+運動機能障害を持つ人々向けの入力支援技術としては，音声入力，視線入力，特殊ハードウェアなどが従来から開発されている．
+音声入力ではDragon Naturally Speaking等が代表的だが\cite{webaim2023motor}，
+運動機能障害，特に脳性麻痺患者では構音障害により正確な認識が困難である．
+視線入力では，Tobii社\cite{cerebralpalsy2023tobii}がALSや脳性麻痺患者向けの視線追跡デバイスを開発したが，
+高価で個人適合に専門的な調整が必要となる．
+特殊ハードウェアとして，適応キーボードやマウススティック等があるが\cite{reciteme2025assistive}，
+導入コストが高く，環境依存性が強い．
+
+これらの従来技術は，いずれも専用機器の購入や環境設定が必要であり，手軽に利用開始できないという課題がある．
+また，個々のユーザーの障害特性に合わせた調整に時間がかかることも，実用化への障壁となっている．
+
+%2.2
+\subsection{カメラベースの入力支援技術}
+
+カメラベースの入力支援技術は，追加の専用ハードウェアなしに実現できる可能性がある．
+Abdallahら\cite{abdallah2022light}は，MediaPipeフレームワークと軽量な深層学習技術を組み合わせ，
+リアルタイムの手話認識システムを開発し，3つのデータセットで最大99.84\%の精度を達成した．
+一方，Leら\cite{le2023real}は一人称視点カメラを用いた手のアクション検出システムにYOLOv7を採用し，
+IOU 0.95の高い基準でも95\%以上の精度を実現している．
+
+しかし，これらの研究は手話やジェスチャー認識が主目的であり，
+運動機能障害者のキーボード入力支援への直接的な応用例は限られている．
+また，一般的なWebカメラでの動作保証や，個人の運動障害特性への適応性についての評価が不十分である．
+
+%2.3
+\subsection{震え補正・運動補正技術}
+
+運動機能障害に伴う震えや不随意運動の補正技術については，信号処理や機械学習を用いた研究が進められている．
+Araújoら\cite{araujo2023analysis}は，生理的振戦とパーキンソン病による病的振戦の両方に対して，
+Fx-LMSアルゴリズムとその改良版であるFsinx-LMSアルゴリズムを評価し，特に病的振戦に対して優れた制御性能を示した．
+また，Wuら\cite{wu2022visual}はLeap Motionセンサーを用いたジェスチャー予測において，
+Kalmanフィルタによる震え補正と時系列データの学習に適したLSTM-RNNの組み合わせにより，99.31\%の予測精度を達成している．
+
+しかし，これらの研究はロボットアームや特殊センサーを用いた震え補正に重点が置かれており，
+カメラベースの画像処理による震え補正技術は十分に検討されていない．
+また，個々のユーザーの震えパターンに自動適応する仕組みについても，実用化に向けた課題が残っている．
+
+%2.4
+\subsection{既存研究の課題と本研究の位置づけ}
+
+これまでに述べた従来の入力支援技術は，それぞれ特定の課題を抱えている．
+特殊ハードウェアや視線入力は高い導入コストが障壁となり，音声入力は構音障害への対応が不十分である．
+カメラベースの技術は拡張性があるが，運動機能障害者のキーボード入力支援への実用的な応用例は少ない．
+
+本研究は，一般的なWebカメラを用いて手の動きを認識し，
+震え補正を施しながら入力意図を推定するシステムの開発により，これらの課題解決を目指す．
+特に，追加のハードウェアを必要とせず，低コストで導入可能な点が既存技術との違いである．
+現在は概念実証段階だが，将来的には個々のユーザーの震えパターンに適応するシステムへの発展を目指している．
+
+
+%3
+\section{提案システム}
+
+運動機能障害者のキーボード入力を支援するため，カメラを用いた入力意図推定システムを提案する．
+本システムは，手の震えや不随意運動の影響を受けやすいユーザーに対し，
+リアルタイムでの入力予測と補正を行い，日常的なPC操作における入力精度を向上させることを目的とする．
+最終的には，一般的なWebカメラのみを使用し，追加のハードウェアなしに動作する実用的なシステムの実現を目指す．
+
+%3.1
+\subsection{システム概要}
+
+図\ref{fig:system}に示すように，提案システムは
+（1）4点キャリブレーションによる作業領域設定，
+（2）手の軌跡データ取得，
+（3）動的特徴量抽出，
+（4）深層学習モデルによる入力意図推定，
+（5）リアルタイム予測表示
+の5つのコンポーネントで構成される．
+
+処理フローは，まずカメラから手の映像を取得し，4点キャリブレーションにより設定した作業領域座標系に変換する．
+次に，MediaPipeを用いて手のランドマークを検出し，可変長（5-90フレーム）の軌跡データを収集する．
+収集した軌跡から18次元の動的特徴量を抽出し，学習済み深層学習モデルによって37クラス（a-z，0-9，スペース）の入力意図推定を行う．
+
+\begin{figure}[tb]
+\centering
+%\includegraphics[width=\columnwidth]{system.png}
+\fbox{システム構成図（作成予定）}
+\caption{システム構成図}
+\label{fig:system}
+\end{figure}
+
+%3.2
+\subsection{4点キャリブレーションによる作業領域設定}
+
+本システムでは，カメラの位置や角度，使用するキーボードの種類が異なっても安定して入力意図を推定するため，
+カメラ映像内のピクセル座標と物理的なキーボード上のキー座標を統一する必要がある．
+そのために，図\ref{fig:keyboard_mapping}に示す4点クリックによるキャリブレーション機能を実装した．
+
+システム起動時，ユーザーはキーボードの四隅（1キー左上，-キー右上，スペースキー右下，スペースキー左下）を順にクリックする．
+これらの4点からホモグラフィ変換行列を算出し，定義された四辺形を「作業領域」として，
+この領域内を基準とした正規化座標系（左上を(0,0)，右下を(1,1)）を構築する．
+以降，MediaPipeで検出した指先のピクセル座標は，すべてこの作業領域座標系に変換してから処理される．
+このキャリブレーション機構により，多様な利用環境への柔軟な対応を可能としている．
+
+\begin{figure}[tb]
+\centering
+%\includegraphics[width=\columnwidth]{keyboard_mapping.png}
+\fbox{キーボードマッピングの例（作成予定）}
+\caption{キーボードマッピングの例}
+\label{fig:keyboard_mapping}
+\end{figure}
+
+%3.3
+\subsection{手の軌跡データの取得}
+
+前節で設定した作業領域座標系に基づき，ユーザーの手指の動きを時系列データとして取得する．
+手のランドマーク検出には，Googleが開発したオープンソースのフレームワークであるMediaPipe Handsを利用し，
+カメラ映像からリアルタイムに手の21個のランドマークポイントを検出する．
+MediaPipeは軽量で処理速度が速く，一般的なWebカメラでも30fpsでの動作が可能であるため，リアルタイム入力支援に適している\cite{mediapipe}．
+
+現在の実装では，入力操作に最も関与すると考えられる人差し指の先端（ランドマークポイント8）の座標を追跡対象とする．
+検出した指先座標は作業領域座標系に変換し，さらに最近傍3キーへの相対位置と距離を計算する．
+キーが押下された瞬間をトリガーとして，その直前の軌跡データをバッファに保持し，学習用サンプルとして保存する．
+
+本システムでは可変長軌跡に対応しており，ユーザーの入力速度に応じて5フレーム（約0.17秒）から90フレーム（約3秒）までの範囲で
+自動的に軌跡長が調整される．この可変長対応により，速い入力から遅い入力まで幅広く対応可能となっている．
+
+%3.4
+\subsection{動的特徴量の設計}
+
+軌跡データから，深層学習モデルによる入力意図推定を高精度で行うために，18次元の動的特徴量を設計した．
+本特徴量設計では，従来の静的な座標情報に加えて，手の動きの時間的変化と震え特性を包括的に捉えることで，
+運動機能障害者特有の複雑な動作パターンからの意図抽出を可能とする．
+
+18次元の特徴量は，
+（1）作業領域内での指先の正規化座標（2次元），
+（2）最近傍3キーへの相対座標（6次元），
+（3）最近傍3キーへの距離（3次元），
+（4）指先の速度および加速度（4次元），
+（5）震えの特性を表す振幅と方向転換頻度（3次元）
+から構成される．
+
+特に震え特性の特徴量では，過去10フレームの座標変動から算出する「振幅」と，
+速度ベクトルの符号変化頻度から算出する「方向転換頻度」により，個々のユーザーの震えパターンを定量化する．
+これらの動的特徴量により，震え除去を行わずに生の軌跡データから直接学習することで，
+重要な意図情報の損失を防ぎつつ，ロバストな入力意図推定を実現する．
+
+%3.5
+\subsection{深層学習モデルによる入力意図推定}
+
+前節で設計した18次元の動的特徴量シーケンスから入力意図を推定するため，
+時系列データのパターン学習に適した複数の深層学習モデルを実装した．
+本研究では，LSTM，CNN，GRU，TCNの4種類のモデルを実装し，それぞれの特性を評価する．
+
+\subsubsection{LSTMモデル}
+
+従来型のアプローチとして，時系列データの長期依存関係を学習できるLSTMを採用した．
+モデル構成は，入力層（18次元），LSTM層（2層，隠れ層128次元，ドロップアウト率0.2），
+全結合層（128→64→37次元），出力層（37クラスのソフトマックス）である．
+
+\subsubsection{CNNモデル}
+
+可変長軌跡への対応が容易で，並列計算が可能なCNNモデルを実装した．
+1次元畳み込み層を用いて時系列パターンを抽出し，Global Average Poolingにより可変長入力に対応する．
+パラメータ数が最小（約167,653）で，学習速度が最も速いという利点がある．
+
+\subsubsection{GRU・TCNモデル}
+
+LSTMの代替として，より高速で省メモリなGRU，および最新の時系列モデルであるTCN（Temporal Convolutional Network）も実装した．
+これらのモデルにより，精度と計算コストのトレードオフを評価する．
+
+
+%4
+\section{実装}
+
+\subsection{開発環境}
+
+本システムは以下の環境で開発した．
+
+\begin{itemize}
+\item OS: macOS / Windows
+\item Python: 3.10
+\item 主要ライブラリ: OpenCV, MediaPipe, PyTorch, scikit-learn
+\item GPU: NVIDIA GeForce GTX 1660 Ti（学習時）
+\end{itemize}
+
+\subsection{データ収集}
+
+学習データの収集には，データ収集専用のプログラム（\texttt{collect\_training\_data.py}）を実装した．
+被験者は画面に表示される目標テキストに従ってキーボード入力を行い，
+各キー押下時の指の軌跡データ（可変長，5-90フレーム）が自動的に記録される．
+
+データ収集では，以下の多様なテキストパターンを使用した：
+
+\begin{enumerate}
+\item アルファベット全26文字を含むパングラム
+\item 英語頻出単語群
+\item 数字を含むランダムな文字列
+\item 連続文字を含む単語
+\end{enumerate}
+
+最終的に約1,000サンプルのデータセットを構築し，訓練用60\%，検証用20\%，テスト用20\%に分割した．
+
+\subsection{モデルの学習}
+
+各モデルの学習には以下のパラメータを使用した：
+
+\begin{itemize}
+\item エポック数: 50-150
+\item バッチサイズ: 32
+\item 学習率: 0.001
+\item 最適化手法: Adam
+\item Early Stopping: 検証損失が5エポック改善しない場合に停止
+\end{itemize}
+
+データ拡張として，ガウシアンノイズの付加，時間軸の伸縮，人工的な震え（4-12Hz正弦波）の付加を実装した．
+
+
+%5
+\section{評価実験}
+
+\subsection{実験概要}
+
+提案システムの性能を評価するため，被験者（研究者本人）によるデータ収集と，
+それを用いた深層学習モデルの学習・評価実験を実施した．
+評価指標として，Top-1精度（第1候補の正解率），Top-3精度（第3候補までに正解が含まれる割合）を用いた．
+
+\subsection{学習結果}
+
+各モデルの学習結果を表\ref{tab:model_comparison}に示す．
+
+\begin{table}[tb]
+\caption{各モデルの性能比較}
+\label{tab:model_comparison}
+\centering
+\begin{tabular}{lccc}\hline\hline
+モデル & Top-1精度 & Top-3精度 & パラメータ数 \\\hline
+LSTM & 86.9\% & 98.0\% & 218,533 \\
+CNN & 85.2\% & 97.5\% & 167,653 \\
+GRU & 86.1\% & 97.8\% & 166,565 \\
+TCN & 85.8\% & 97.6\% & 207,909 \\\hline
+\end{tabular}
+\end{table}
+
+LSTMモデルが最も高い精度を達成したが，CNNモデルも高速性とのトレードオフで優れた性能を示した．
+図\ref{fig:learning_curves}に学習曲線を示す．
+
+\begin{figure}[tb]
+\centering
+%\includegraphics[width=\columnwidth]{learning_curves.png}
+\fbox{学習曲線（作成予定）}
+\caption{モデルの学習曲線}
+\label{fig:learning_curves}
+\end{figure}
+
+\subsection{データ多様化による性能改善}
+
+初期モデルでは，学習データ上で高精度を達成した一方で，リアルタイム予測では性能が著しく低下するという課題が観測された．
+この原因を学習データの偏りと分析し，意図的に多様なパターンを含むデータを追加収集した．
+
+約1,000サンプルに拡充したデータセットでモデルを再学習させた結果，
+検証データにおいて正解率86.9\%，Top-3正解率98.0\%という高水準を達成した．
+さらに重要な成果として，この新モデルを用いた実環境でのリアルタイム予測では，
+「通常速度の入力ではほぼ100\%」「意図的に手を揺らしながらの入力でも高い確率で正解が予測される」など，
+体感性能が劇的に向上した．
+これにより，データセットの多様化が，本システムの性能を実用レベルに引き上げる上で極めて有効であることが実験的に示された．
+
+\subsection{リアルタイム予測システム}
+
+学習済みモデルを用いたリアルタイム予測システムを実装した．
+図\ref{fig:realtime_prediction}に示すように，ユーザーの手の動きをリアルタイムで追跡し，
+Top-3の予測候補を確信度とともに画面に表示する．
+
+\begin{figure}[tb]
+\centering
+%\includegraphics[width=\columnwidth]{realtime_prediction.png}
+\fbox{リアルタイム予測画面（作成予定）}
+\caption{リアルタイム予測システムの動作画面}
+\label{fig:realtime_prediction}
+\end{figure}
+
+
+%6
+\section{考察}
+
+\subsection{モデルの比較}
+
+4種類のモデルを比較した結果，LSTMが最も高い精度を達成した一方で，
+CNNはパラメータ数が最小で学習速度が最も速いという利点があった．
+実用化を考えると，リアルタイム性を重視する場合はCNN，精度を重視する場合はLSTMが適していると考えられる．
+
+\subsection{可変長軌跡への対応}
+
+固定長（60フレーム）から可変長（5-90フレーム）に対応したことで，
+ユーザーの入力速度に柔軟に対応できるようになった．
+特に，速い入力（15-30フレーム）でも高い精度で予測できることが確認された．
+
+\subsection{データ多様化の効果}
+
+学習データの多様化が，リアルタイム予測性能を劇的に改善させることが示された．
+これは，特定のパターンへの過適合を防ぎ，汎化性能を向上させる上で極めて重要であることを示している．
+
+\subsection{実用化に向けた課題}
+
+本研究は健常者によるデータ収集に基づいており，実際の運動機能障害者による評価が今後の課題である．
+また，個々のユーザーの障害特性に適応する個人化機能の実装も必要である．
+
+
+%7
+\section{おわりに}
+
+本研究では，運動機能障害者のキーボード入力を支援するため，
+カメラを用いた機械学習による入力意図推定システムを提案した．
+4点キャリブレーション，MediaPipeによる手の軌跡データ収集，18次元動的特徴量の設計，
+深層学習モデル（LSTM, CNN, GRU, TCN）による時系列学習という一連の処理により，
+震えを含む軌跡から直接的な意図推定を実現した．
+
+評価実験では，当初観測された学習結果と実使用環境の性能乖離という課題に対し，
+学習データの多様化というアプローチで解決を図った．
+その結果，検証データで86.9\%という高精度を達成し，リアルタイム予測においても実用レベルの性能向上を確認した．
+これにより，追加のハードウェアを必要としない低コストな入力支援システムの実現可能性を実証した．
+
+今後は，実際の運動機能障害者による評価実験，個人適応システムの開発を通じて，実用化に向けた研究を進める．
+
+
+
+\begin{acknowledgment}
+本研究を進めるにあたり，有益な助言をいただいた岩井研究室の皆様に深く感謝いたします．
+\end{acknowledgment}
+
+
+
+\begin{thebibliography}{10}
+
+\bibitem{webaim2023motor}
+WebAIM:
+Motor Disabilities - Types of Motor Disabilities,
+\url{https://webaim.org/articles/motor/motordisabilities} (2023).
+
+\bibitem{cerebralpalsy2023tobii}
+Cerebral Palsy Guidance:
+Assistive Technology for People with Cerebral Palsy,
+\url{https://www.cerebralpalsyguidance.com/cerebral-palsy/treatment/assistive-technology/} (2023).
+
+\bibitem{reciteme2025assistive}
+Recite Me:
+Assistive Technology for People with Motor Disabilities,
+\url{https://reciteme.com/news/assistive-technology-for-motor-disabilities/} (2025).
+
+\bibitem{abdallah2022light}
+Abdallah, E. E. and Hameed, M. A.:
+Light-weight deep learning-based sign language on edge devices for the deaf and dumb community,
+IEEE Access, Vol.~10, pp.~79416--79433 (2022).
+
+\bibitem{le2023real}
+Le, T. T. B., et al.:
+Real-Time Hand Gesture Detection Using YOLOv7 for Closed Human-Robot Interaction,
+2023 International Conference on Advanced Robotics and Intelligent Systems (ARIS), pp.~1--6 (2023).
+
+\bibitem{araujo2023analysis}
+Araújo, J. M., et al.:
+Analysis and comparison of tremor control algorithms for upper limb rehabilitation exoskeletons with three topologies,
+Medical Engineering \& Physics, Vol.~115, p.~103964 (2023).
+
+\bibitem{wu2022visual}
+Wu, P. and Zhang, S.:
+Visual gesture recognition based on LSTM-RNN with Kalman filter,
+Journal of Electronic Imaging, Vol.~31, No.~4, p.~043011 (2022).
+
+\bibitem{mediapipe}
+Google:
+MediaPipe Hands,
+\url{https://developers.google.com/mediapipe/solutions/vision/hand_landmarker} (2024).
+
+\end{thebibliography}
+
+
+
+
+\end{document}
+
