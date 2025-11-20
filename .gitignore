@@ -47,3 +47,27 @@ data/training/*/session_*/session_metadata.json
 !data/training/.gitkeep
 
 /aaa
+
+# ========== LaTeX関連（論文フォルダ） ==========
+# LaTeX一時ファイル
+paper/**/*.aux
+paper/**/*.log
+paper/**/*.dvi
+paper/**/*.synctex.gz
+paper/**/*.fdb_latexmk
+paper/**/*.fls
+paper/**/*.out
+paper/**/*.toc
+paper/**/*.bbl
+paper/**/*.blg
+paper/**/*.lof
+paper/**/*.lot
+paper/**/*.bak
+
+# 論文のコンパイル済みPDFは除外
+paper/**/*.pdf
+
+# ただし、論文用の図（figures/）は含める（重要！）
+!paper/figures/*.pdf
+!paper/figures/*.png
+!paper/figures/*.jpg
