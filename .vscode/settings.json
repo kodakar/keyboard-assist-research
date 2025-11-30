@@ -41,21 +41,21 @@
   "latex-workshop.view.pdf.viewer": "tab",
   
   // レシピ設定
-  "latex-workshop.latex.recipe.default": "platex",
+  "latex-workshop.latex.recipe.default": "lastUsed",
   "latex-workshop.latex.recipes": [
     {
-      "name": "platex",
+      "name": "platex (with bibtex)",
       "tools": [
+        "platex",
+        "pbibtex",
         "platex",
         "platex",
         "dvipdfmx"
       ]
     },
     {
-      "name": "platex (with bibtex)",
+      "name": "platex",
       "tools": [
-        "platex",
-        "pbibtex",
         "platex",
         "platex",
         "dvipdfmx"
@@ -79,8 +79,10 @@
       "name": "pbibtex",
       "command": "pbibtex",
       "args": [
-        "%DOCFILE%"
-      ]
+        "-kanji=utf8",
+        "%DOC%"
+      ],
+      "env": {}
     },
     {
       "name": "dvipdfmx",
