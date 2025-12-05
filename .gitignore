@@ -8,6 +8,9 @@ data/
 .env
 *.env
 
+# VSCode設定
+.vscode/settings.json
+
 keyboard_map.json
 git_user_change.txt
 key.txt
