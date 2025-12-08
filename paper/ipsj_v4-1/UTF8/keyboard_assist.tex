@@ -14,6 +14,8 @@
 \usepackage[dvipdfmx]{graphicx}
 \usepackage{latexsym}
 \usepackage{url}
+\usepackage{tikz}
+\usetikzlibrary{shapes.geometric, arrows.meta, positioning, calc}
 
 \def\Underline{\setbox0\hbox\bgroup\let\\\endUnderline}
 \def\endUnderline{\vphantom{y}\egroup\smash{\underline{\box0}}\\}
@@ -72,7 +74,8 @@ Information Systems and Multimedia Design, Graduate School of Science and Techno
 %1
 \section{はじめに}
 
-パソコンやスマートフォンなどの情報機器は，現代社会において不可欠なコミュニケーション手段である．
+パソコンやスマートフォンなどのデジタルデバイスは，
+現代社会において情報アクセスやコミュニケーションに不可欠なツールとなっている．
 しかし，脳性麻痺，本態性振戦，パーキンソン病などの神経疾患や加齢に伴う運動機能の低下により，手の震えや不随意運動を持つ人々にとって，キーボードによる正確な文字入力は困難であり，デジタル社会への参加を阻む障壁となる．
 
 運動機能障害者向けの入力支援技術として，音声入力\cite{webaim2023motor}，視線入力\cite{cerebralpalsy2023tobii}，特殊キーボード\cite{reciteme2025assistive}などが開発されてきた．
@@ -94,11 +97,13 @@ Information Systems and Multimedia Design, Graduate School of Science and Techno
 
 音声入力はDragon NaturallySpeaking等に代表され広く普及しているが\cite{webaim2023motor}，脳性麻痺など構音障害を伴う場合には発話の明瞭度が低下するため正確な認識が困難となる．
 視線入力ではTobii社がALSや脳性麻痺患者向けの視線追跡デバイスを開発しており\cite{cerebralpalsy2023tobii}，重度の運動障害者に有効な手段となっているが，デバイスが数十万円と高価であり，個人ごとのキャリブレーションにも専門的な調整を要する．
+Gizatdinovaら\cite{gizatdinova2023vision}は視線入力とヘッド入力を比較評価し，ヘッド入力は高精度だが入力速度が遅く，視線入力は高速だが精度が劣るという特有の課題を報告している．
 特殊ハードウェアとしては適応キーボードやマウススティック等があり\cite{reciteme2025assistive}，物理的なアクセシビリティを向上させるが，特定の姿勢や設置環境を前提とするため汎用性に欠ける．
 Cossovichら\cite{cossovich2023co}は運動機能障害者へのインタビュー調査を通じて，多くのユーザーが大衆向けに設計された既存デバイスで我慢している現状を報告しており，より適切な入力支援技術の開発が求められている．
 
 一方，カメラベースの手認識技術は追加ハードウェアなしに実現できる可能性がある．
-Abdallahら\cite{abdallah2022light}はMediaPipe\cite{lugaresi2019mediapipe}とGRU/CNNを組み合わせた手話認識で99.84\%の精度を達成し，Leら\cite{le2023real}はYOLOv7による一人称視点からの手動作検出で95\%以上の精度を報告している．
+Pradeepら\cite{pradeep2025real}はWebカメラによる顔追跡とニューラルネットワークを組み合わせたハンズフリーマウス制御システムを開発し，運動機能障害者が頭部の動きでマウスカーソルを操作できることを実証した．
+また，Abdallahら\cite{abdallah2022light}はMediaPipe\cite{lugaresi2019mediapipe}とGRU/CNNを組み合わせた手話認識で99.84\%の精度を達成し，Leら\cite{le2023real}はYOLOv7による一人称視点からの手動作検出で95\%以上の精度を報告している．
 キーボード入力への応用としては，Mallikら\cite{mallik2024virtual}がMediaPipe HolisticとLSTMにより仮想キーボードを実装し97\%の認識精度を達成，Rahimら\cite{rahimadvanced}は1D CNNとBi-GRUを組み合わせたCronoNetで多言語対応の仮想キーボードを開発した．
 しかし，これらの研究は健常者の安定した動作を前提としており，震えや不随意運動を伴う入力への対応は考慮されていない．
 運動機能障害者がこれらのシステムを利用するには，不規則な動作パターンからでも入力意図を推定できる手法が必要となる．
@@ -110,10 +115,12 @@ Abdallahら\cite{abdallah2022light}はMediaPipe\cite{lugaresi2019mediapipe}とGR
 Araújoら\cite{araujo2023analysis}は生理的振戦とパーキンソン病による病的振戦の両方に対してFx-LMSアルゴリズムを評価し，特に病的振戦に対して優れた補正性能を示した．
 Wuら\cite{wu2022visual}はLeap Motionセンサーを用いたジェスチャー予測において，Kalmanフィルタによる震え補正とLSTM-RNNの組み合わせにより99.31\%の精度を達成している．
 Wolkeら\cite{wolke2025validity}はMediaPipeを用いた振戦の定量的評価手法を提案し，スマートフォンカメラでも臨床的に有効な精度が得られることを示した．
-これらの研究では，震えを信号処理により除去または補正するアプローチが主流となっている．
+Neogら\cite{neog2024hand}は3D手部ランドマーク検出を用いた手機能評価システムにより，仮想環境でのリハビリテーション効果を示した．
+これらの研究では，震えを信号処理により除去または補正するアプローチが主流である．
 また，震えを補正すべきノイズとして扱う研究が多く，震えを個人の特性として学習するアプローチは十分に検討されていない．
 
 一方，時系列データからの運動意図推定では，Long Short-Term Memory（LSTM）\cite{hochreiter1997long}やGated Recurrent Unit（GRU）\cite{cho2014learning}などの再帰型ニューラルネットワークが広く用いられている．
+Leiら\cite{lei2022intention}はロボット車椅子のナビゲーションにおいて意図予測ベースの共有制御システムを提案し，脳性麻痺患者において従来手法より約30\%タスク完了時間を短縮した．
 Yangら\cite{yang2023learning}はRNNを用いて上肢の運動開始を予測し，支援ロボットの制御に応用した．
 しかし，これらの意図推定研究は特殊センサーやロボットアームを前提としており，汎用カメラを用いたキーボード入力支援への適用例は見られない．
 
@@ -146,12 +153,57 @@ Yangら\cite{yang2023learning}はRNNを用いて上肢の運動開始を予測�
 推定結果はTop-3候補とその確率をリアルタイムで画面に表示する．
 
 \begin{figure}[tb]
-\centering
-%\includegraphics[width=\columnwidth]{system.png}
-\fbox{システム構成図（作成予定）}
-\caption{提案システムの処理フロー}
-\label{fig:system}
-\end{figure}
+    \centering
+    \begin{tikzpicture}[
+        node distance=0.4cm,
+        block/.style={
+            rectangle,
+            draw=black,
+            line width=1pt,
+            fill=gray!25,
+            text width=4.2cm,
+            text centered,
+            minimum height=0.75cm,
+            font=\sffamily\bfseries\small,
+            rounded corners=1pt
+        },
+        process/.style={
+            rectangle,
+            draw=black,
+            line width=1pt,
+            fill=white,
+            text width=4.2cm,
+            text centered,
+            minimum height=0.75cm,
+            font=\sffamily\bfseries\small,
+            rounded corners=1pt
+        },
+        arrow/.style={
+            -Stealth,
+            line width=1pt,
+            black
+        }
+    ]
+    
+    % ノード配置
+    \node[block] (camera) {カメラ入力};
+    \node[process, below=of camera] (calib) {4点キャリブレーション};
+    \node[process, below=of calib] (mediapipe) {手の軌跡データ収集};
+    \node[process, below=of mediapipe] (feature) {18次元特徴量抽出};
+    \node[block, below=of feature] (lstm) {GRU入力意図推定};
+    \node[block, below=of lstm] (output) {リアルタイム予測表示};
+    
+    % 矢印
+    \draw[arrow] (camera) -- (calib);
+    \draw[arrow] (calib) -- (mediapipe);
+    \draw[arrow] (mediapipe) -- (feature);
+    \draw[arrow] (feature) -- (lstm);
+    \draw[arrow] (lstm) -- (output);
+    
+    \end{tikzpicture}
+    \caption{提案システムの処理フロー}
+    \label{fig:system}
+    \end{figure}
 
 %3.2
 \subsection{座標系の統一と正規化}
@@ -166,8 +218,7 @@ Yangら\cite{yang2023learning}はRNNを用いて上肢の運動開始を予測�
 
 \begin{figure}[tb]
 \centering
-%\includegraphics[width=\columnwidth]{keyboard_mapping.png}
-\fbox{キーボードマッピングの例（作成予定）}
+\includegraphics[width=\columnwidth]{keyboard_mapping.png}
 \caption{4点キャリブレーションによる座標系変換の例}
 \label{fig:keyboard_mapping}
 \end{figure}
@@ -185,8 +236,7 @@ MediaPipeは軽量で処理速度が速く，一般的なWebカメラでも30fps
 
 \begin{figure}[tb]
 \centering
-%\includegraphics[width=\columnwidth]{hand_landmarks.png}
-\fbox{hand\_landmarks.png}
+\includegraphics[width=\columnwidth]{hand_landmarks.png}
 \caption{MediaPipe Handsによる手のランドマーク検出（21点）}
 \label{fig:hand_landmarks}
 \end{figure}
@@ -198,7 +248,7 @@ MediaPipeは軽量で処理速度が速く，一般的なWebカメラでも30fps
 本特徴量設計では，従来の静的な座標情報に加えて，手の動きの時間的変化と震え特性を包括的に捉えることで，
 運動機能障害者特有の複雑な動作パターンからの意図抽出を可能とする．
 
-18次元の特徴量は，
+図\ref{fig:feature_structure}に示すように，18次元の特徴量は，
 （1）作業領域内での指先の正規化座標（2次元），
 （2）最近傍3キーへの相対座標（6次元），
 （3）最近傍3キーへの距離（3次元），
@@ -210,6 +260,13 @@ MediaPipeは軽量で処理速度が速く，一般的なWebカメラでも30fps
 速度ベクトルの符号変化頻度から算出する「方向転換頻度」により，個々のユーザーの震えパターンを定量化する．
 これらの動的特徴量により，震え除去を行わずに生の軌跡データから直接学習することで，
 重要な意図情報の損失を防ぎつつ，ロバストな入力意図推定を実現する．
+
+\begin{figure}[tb]
+\centering
+\fbox{feature structure 18dim.png}
+\caption{18次元動的特徴量の構成}
+\label{fig:feature_structure}
+\end{figure}
 
 %3.5
 \subsection{GRUモデルによる入力意図推定}
@@ -223,11 +280,10 @@ Long Short-Term Memory（LSTM）\cite{hochreiter1997long}，
 1次元畳み込みニューラルネットワーク（CNN），
 Gated Recurrent Unit（GRU），
 Temporal Convolutional Network（TCN）\cite{bai2018empirical}の
-4種類を比較した．
+4種類を比較した結果，GRUが最も優れた性能を示した（4.2節）．
 
-表\ref{tab:model_comparison}に示すように，
-GRUはオフライン精度98.0\%，リアルタイム精度81.8\%と最も優れた性能を達成した．
-また，LSTMと同等の長期依存関係学習能力を持ちながらパラメータ数が約24\%少なく学習・推論ともに高速であるため，
+GRUはLSTMと同等の長期依存関係学習能力を持ちながら
+パラメータ数が約24\%少なく学習・推論ともに高速であるため，
 実用的なリアルタイム処理が可能である．
 
 採用したGRUの構成は，
@@ -236,171 +292,363 @@ GRU層（2層，隠れ層128次元，ドロップアウト率0.2），
 全結合層（128→64→37次元），
 出力層（37クラスのソフトマックス）である．
 
-\begin{table}[tb]
-\caption{深層学習モデルの比較}
-\label{tab:model_comparison}
-\centering
-\begin{tabular}{lccc}\hline\hline
-モデル & パラメータ数 & オフライン精度 & リアルタイム精度 \\\hline
-LSTM & 約219K & 97.5\% & 72.7\% \\
-CNN & 約169K & 93.6\% & 45.5\% \\
-GRU & 約167K & \textbf{98.0\%} & \textbf{81.8\%} \\
-TCN & 約209K & 94.2\% & 36.4\% \\\hline
-\end{tabular}
-\end{table}
 
 
 %4
-\section{実装}
+\section{評価実験}
 
-\subsection{開発環境}
+\subsection{実験設定}
 
-本システムは以下の環境で開発した．
+\subsubsection{学習用データの収集}
 
-\begin{itemize}
-\item OS: macOS / Windows
-\item Python: 3.10
-\item 主要ライブラリ: OpenCV, MediaPipe, PyTorch, scikit-learn
-\item GPU: NVIDIA GeForce GTX 1660 Ti（学習時）
-\end{itemize}
+提案モデルの学習用データとして，
+多様な文字パターンを含むキーボード軌跡データを収集した．
+図\ref{fig:data_collection_setup}に示す実験環境において，
+a-z，0-9，スペースの37種類の文字を均等に含み
+ランダムな順序で構成した文字列（10種類，各95文字）を目標テキストとし，
+研究者本人が各文字列を5回ずつ入力することで，
+合計4,750サンプル（10種類×5回×95文字）のデータセットを構築した．
 
-\subsection{データ収集}
+各キー入力時の指先軌跡は可変長（5フレーム〜90フレーム）で記録した．
+これは，キー押下直前の軌跡長が入力速度によって異なるためであり，
+速い入力から遅い入力まで柔軟に対応できる．
+図\ref{fig:trajectory_distribution}に軌跡長の分布を示す．
+データセット全体で多様な入力速度が含まれていることが確認できる．
 
-学習データの収集には，データ収集専用のプログラム（\texttt{collect\_training\_data.py}）を実装した．
-被験者は画面に表示される目標テキストに従ってキーボード入力を行い，
-各キー押下時の指の軌跡データ（可変長，5-90フレーム）が自動的に記録される．
+収集したデータセットは，
+訓練用（60\%，2,850サンプル），
+検証用（20\%，950サンプル），
+テスト用（20\%，950サンプル）に分割した．
 
-データ収集では，以下の多様なテキストパターンを使用した：
+\begin{figure}[tb]
+\centering
+\fbox{data collection setup.png}
+\caption{データ収集の実験環境}
+\label{fig:data_collection_setup}
+\end{figure}
 
-\begin{enumerate}
-\item アルファベット全26文字を含むパングラム
-\item 英語頻出単語群
-\item 数字を含むランダムな文字列
-\item 連続文字を含む単語
-\end{enumerate}
+\begin{figure}[tb]
+\centering
+\fbox{trajectory length distribution.png}
+\caption{可変長軌跡データの分布}
+\label{fig:trajectory_distribution}
+\end{figure}
 
-最終的に約1,000サンプルのデータセットを構築し，訓練用60\%，検証用20\%，テスト用20\%に分割した．
-
-\subsection{モデルの学習}
+\subsubsection{学習条件}
 
 各モデルの学習には以下のパラメータを使用した：
 
 \begin{itemize}
-\item エポック数: 50-150
+\item エポック数: 100
 \item バッチサイズ: 32
 \item 学習率: 0.001
 \item 最適化手法: Adam
-\item Early Stopping: 検証損失が5エポック改善しない場合に停止
+\item 損失関数: Cross Entropy Loss（クラス重み付き）
+\item 学習率スケジューラ: ReduceLROnPlateau（factor=0.5, patience=3）
+\item Early Stopping（patience=5）
 \end{itemize}
 
-データ拡張として，ガウシアンノイズの付加，時間軸の伸縮，人工的な震え（4-12Hz正弦波）の付加を実装した．
+\subsubsection{評価指標}
 
+本研究では，システムの性能を多角的に評価するため，
+以下の評価指標を用いた．
 
-%5
-\section{評価実験}
+\textbf{オフライン評価:}
+学習済みモデルをテストセット（950サンプル）で評どの情報機器は，現代社会において不可欠なコミュニケーション手段である．価し，
+以下の指標を測定した．
 
-\subsection{実験概要}
+\begin{itemize}
+\item Top-1精度: 第1候補が正解である割合
+\item Top-3精度: 第3候補までに正解が含まれる割合
+\end{itemize}
 
-提案システムの性能を評価するため，被験者（研究者本人）によるデータ収集と，
-それを用いた深層学習モデルの学習・評価実験を実施した．
-評価指標として，Top-1精度（第1候補の正解率），Top-3精度（第3候補までに正解が含まれる割合）を用いた．
+\textbf{リアルタイム評価:}
+実際のキーボード入力時のシステム性能を評価するため，
+被験者が実際に文字列を入力し，
+以下の指標を測定した\cite{mackenzie2002text}．
 
-\subsection{学習結果}
+\begin{itemize}
+\item Top-1精度: 第1候補が正解である割合
+\item Top-3精度: 第3候補までに正解が含まれる割合
+\item WPM (Words Per Minute): 1分あたりの入力単語数
+\item 平均入力時間: 1文字あたりの平均入力時間
+\item エラー率: 第1候補が不正解である割合
+\item 救済率: ユーザーが誤ったキーを押下した場合に，
+  システムが正しい文字を推定できた割合
+\end{itemize}
 
-各モデルの学習結果を表\ref{tab:model_evaluation}に示す．
+\subsection{モデル比較実験}
+
+入力意図推定に適した時系列モデルを選定するため，
+4種類の深層学習モデル（LSTM，CNN，GRU，TCN）を比較評価した．
+各モデルを4.1.1で構築した訓練データで学習させ，
+テストセット（950サンプル）によるオフライン評価と
+実際のキーボード入力によるリアルタイム評価を実施し，
+実環境での性能を検証した．
+
+まず，テストセットを用いたオフライン評価を行い，
+各モデルの基本的な認識性能を測定した．
+図\ref{fig:learning_curves}に各モデルの学習曲線を示す．
+いずれのモデルも訓練損失と検証損失が安定して収束しており，
+適切に学習できていることが確認できる．
+表\ref{tab:offline_performance}に示すように，
+GRUがTop-1精度98.0\%と最も高い性能を達成した．
+また，GRUはパラメータ数が約167Kと4モデル中最小であり，
+モデルの計算コストが低いため学習時間が短く，
+リアルタイム推論においても高速に動作する．
+詳細な認識パターンを確認するため，
+図\ref{fig:confusion_matrix}にGRUモデルの混同行列を示す．
+対角成分が高く，ほとんどのクラスで高い認識精度を達成している．
+一部の隣接キー（d-f、o-0など）間で誤認識が見られるものの，
+全体として優れた識別性能を示した．
 
 \begin{table}[tb]
-\caption{各モデルの性能比較}
-\label{tab:model_evaluation}
+\caption{モデル別オフライン性能評価}
+\label{tab:offline_performance}
 \centering
 \begin{tabular}{lccc}\hline\hline
-モデル & Top-1精度 & Top-3精度 & パラメータ数 \\\hline
-LSTM & 86.9\% & 98.0\% & 218,533 \\
-CNN & 85.2\% & 97.5\% & 167,653 \\
-GRU & 86.1\% & 97.8\% & 166,565 \\
-TCN & 85.8\% & 97.6\% & 207,909 \\\hline
+モデル & パラメータ数 & Top-1精度 & Top-3精度 \\\hline
+LSTM & 約219K & 97.47\% & 99.89\% \\
+CNN & 約169K & 93.58\% & 99.47\% \\
+GRU & 約167K & \textbf{98.00\%} & \textbf{99.89\%} \\
+TCN & 約209K & 94.21\% & 99.47\% \\\hline
 \end{tabular}
 \end{table}
 
-LSTMモデルが最も高い精度を達成したが，CNNモデルも高速性とのトレードオフで優れた性能を示した．
-図\ref{fig:learning_curves}に学習曲線を示す．
+\begin{figure}[tb]
+\centering
+\includegraphics[width=\columnwidth]{confusion_matrix.png}
+\caption{GRUモデルの混同行列（テストセット）}
+\label{fig:confusion_matrix}
+\end{figure}
 
 \begin{figure}[tb]
 \centering
-%\includegraphics[width=\columnwidth]{learning_curves.png}
-\fbox{学習曲線（作成予定）}
-\caption{モデルの学習曲線}
+\includegraphics[width=\linewidth]{learning_curves.png}
+\caption{GRUモデルの学習曲線}
 \label{fig:learning_curves}
 \end{figure}
 
-\subsection{データ多様化による性能改善}
+\begin{figure}[tb]
+\centering
+\fbox{per class accuracy.png}
+\caption{クラス別認識精度}
+\label{fig:per_class_accuracy}
+\end{figure}
 
-初期モデルでは，学習データ上で高精度を達成した一方で，リアルタイム予測では性能が著しく低下するという課題が観測された．
-この原因を学習データの偏りと分析し，意図的に多様なパターンを含むデータを追加収集した．
+次に，実環境での性能を検証するため，
+被験者が「hello world」を実際に入力するリアルタイム評価を行った．
+図\ref{fig:realtime_prediction}に実際のリアルタイム予測画面を示す．
+システムは各キー入力に対してTop-3候補を確率とともに提示し，
+ユーザーは第1候補が誤っている場合でも候補から選択できる仕組みとなっている．
+表\ref{tab:realtime_performance}に示すように，
+GRUがTop-1精度81.8\%，Top-3精度100.0\%と最も優れた性能を示した．
+オフライン評価と比較してTop-1精度は約16ポイント低下したが，
+Top-3精度が100\%であることから，
+正解が常に上位3候補に含まれており，
+候補提示による入力支援が有効に機能することが確認された．
+この結果に基づき，入力意図推定モデルとしてGRUを採用した（3.5節）．
 
-約1,000サンプルに拡充したデータセットでモデルを再学習させた結果，
-検証データにおいて正解率86.9\%，Top-3正解率98.0\%という高水準を達成した．
-さらに重要な成果として，この新モデルを用いた実環境でのリアルタイム予測では，
-「通常速度の入力ではほぼ100\%」「意図的に手を揺らしながらの入力でも高い確率で正解が予測される」など，
-体感性能が劇的に向上した．
-これにより，データセットの多様化が，本システムの性能を実用レベルに引き上げる上で極めて有効であることが実験的に示された．
-
-\subsection{リアルタイム予測システム}
-
-学習済みモデルを用いたリアルタイム予測システムを実装した．
-図\ref{fig:realtime_prediction}に示すように，ユーザーの手の動きをリアルタイムで追跡し，
-Top-3の予測候補を確信度とともに画面に表示する．
+\begin{table}[tb]
+\caption{モデル別リアルタイム性能評価}
+\label{tab:realtime_performance}
+\centering
+\begin{tabular}{lccc}\hline\hline
+モデル & Top-1精度 & Top-3精度 & WPM \\\hline
+LSTM & 72.7\% & 81.8\% & 71.0 \\
+CNN & 45.5\% & 54.5\% & 61.6 \\
+GRU & \textbf{81.8\%} & \textbf{100.0\%} & \textbf{69.9} \\
+TCN & 36.4\% & 45.5\% & 48.5 \\\hline
+\end{tabular}
+\end{table}
 
 \begin{figure}[tb]
 \centering
-%\includegraphics[width=\columnwidth]{realtime_prediction.png}
-\fbox{リアルタイム予測画面（作成予定）}
-\caption{リアルタイム予測システムの動作画面}
+\fbox{realtime prediction screen.png}
+\caption{リアルタイム予測画面の例（GRUモデル）}
 \label{fig:realtime_prediction}
 \end{figure}
 
+\subsection{実用性評価}
 
-%6
+選定したGRUモデルの実環境での実用性を検証するため，
+健常者○名を対象に実用性評価実験を実施した．
+評価には，言語モデルによる予測効果を排除するため，
+37種類の全文字が均等に含まれるランダム文字列を入力テキストとして用いることで，
+純粋なシステムの性能を測定した．
+また，異なる入力状況下での性能を検証するため，
+丁寧入力，通常入力，摂動負荷入力の3種類の入力スタイルを設定した．
+丁寧入力では，被験者にゆっくり正確な入力を求めることで，
+システムが達成可能な性能上限を確認した．
+通常入力では，日常的な入力速度を想定した標準的な入力を行わせることで，
+実用的な環境下での性能を評価した．
+摂動負荷入力では，
+図\ref{fig:perturbation_setup}に示すように，
+被験者の手首に紐を取り付けキー押下直前に引っ張ることで物理的な摂動を加え，
+不随意運動による入力の揺らぎを模擬した条件下でのシステムの頑健性を検証した．
+
+\begin{figure}[tb]
+\centering
+\fbox{perturbation setup.png}
+\caption{摂動負荷入力の実験セットアップ}
+\label{fig:perturbation_setup}
+\end{figure}
+
+表\ref{tab:usability}に被験者○名の平均性能を示す．
+丁寧入力ではTop-1精度○○\%と高い精度を達成した．
+通常入力ではTop-1精度○○\%を維持し，実用的な速度での入力が可能であった．
+摂動負荷入力ではTop-1精度が○○\%に低下したものの，
+Top-3精度は○○\%を維持し，
+誤入力時の救済率は○○\%を示した．
+この救済率は，ユーザーが誤ったキーを押下した場合でも，
+システムが高い確率で正しい入力意図を推定できることを示している．
+
+\begin{table}[tb]
+\caption{入力スタイル別性能評価（被験者○名の平均）}
+\label{tab:usability}
+\centering
+\small
+\begin{tabular}{lcccc}\hline\hline
+入力スタイル & Top-1 & Top-3 & 時間 & WPM \\\hline
+丁寧入力 & 91.9\% & 100.0\% & 2.2秒 & 27.2 \\
+通常入力 & 81.1\% & 100.0\% & 1.4秒 & 44.0 \\
+摂動負荷入力 & 76.7\% & 93.0\% & 1.7秒 & 34.5 \\
+\hline
+\multicolumn{5}{l}{\small 摂動負荷入力時の救済率: 73.5\%} \\
+\hline
+\end{tabular}
+\end{table}
+
+以上の評価実験により，
+提案システムが異なる入力状況下においても実用的な性能を持つことが確認された．
+特に，摂動負荷条件下においても高い救済率を達成したことから，
+運動機能障害者のキーボード入力を支援する有効な手段となり得ることが示された．
+
+
+%5
 \section{考察}
 
-\subsection{モデルの比較}
+\subsection{モデル選択の妥当性}
 
-4種類のモデルを比較した結果，LSTMが最も高い精度を達成した一方で，
-CNNはパラメータ数が最小で学習速度が最も速いという利点があった．
-実用化を考えると，リアルタイム性を重視する場合はCNN，精度を重視する場合はLSTMが適していると考えられる．
+4.2節のモデル比較実験では，LSTM，CNN，GRU，TCNの4種類を評価した結果，
+GRUがオフライン精度98.0\%，リアルタイム精度81.8\%と最も優れた性能を示した．
+LSTMもオフライン精度97.5\%と高精度を達成したが，
+パラメータ数がGRUの約1.3倍（219K vs 167K）であり，
+学習時間およびリアルタイム推論速度の面でGRUが優位であった．
+CNNとTCNはオフライン精度がそれぞれ93.6\%，94.2\%にとどまり，
+特にリアルタイム評価ではCNN 45.5\%，TCN 36.4\%と大幅に性能が低下した．
+これは，畳み込み層による局所的な特徴抽出が，
+可変長の時系列パターン全体を捉える上で不十分であったためと考えられる．
 
-\subsection{可変長軌跡への対応}
+GRUの優位性は，
+入力ゲートと忘却ゲートを統合した更新ゲートにより，
+LSTMよりも少ないパラメータで効率的に時系列依存関係を学習できる点にある．
+本研究のような可変長（5-90フレーム）の手指軌跡データに対しては，
+この特性が特に有効に働いたと考えられる．
 
-固定長（60フレーム）から可変長（5-90フレーム）に対応したことで，
-ユーザーの入力速度に柔軟に対応できるようになった．
-特に，速い入力（15-30フレーム）でも高い精度で予測できることが確認された．
+\subsection{実用性評価の考察}
 
-\subsection{データ多様化の効果}
+4.3節の実用性評価では，
+丁寧入力，通常入力，摂動負荷入力の3種類の入力スタイルで評価を実施した．
+丁寧入力でTop-1精度○○\%を達成したことから，
+システムの理論的な性能上限が十分に高いことが確認された．
+通常入力でTop-1精度○○\%を維持できたことは，
+実用的な入力速度においてもシステムが有効に機能することを示している．
 
-学習データの多様化が，リアルタイム予測性能を劇的に改善させることが示された．
-これは，特定のパターンへの過適合を防ぎ，汎化性能を向上させる上で極めて重要であることを示している．
+特筆すべきは，摂動負荷入力における救済効果である．
+物理的な摂動により意図的に入力の揺らぎを発生させた条件下では，
+Top-1精度が○○\%に低下したものの，
+Top-3精度は○○\%を維持し，
+誤入力時の救済率は○○\%を達成した．
+この救済率は，ユーザーが押下したキーと入力意図が異なる場合でも，
+システムが上位3候補の中に正解を含められる確率が高いことを意味する．
+運動機能障害者の支援においては，
+この「候補提示による救済機能」が入力効率を大幅に改善する可能性がある．
 
-\subsection{実用化に向けた課題}
+また，3種類の入力スタイル間でTop-3精度がTop-1精度に比べて相対的に高い値を維持していることから，
+提案システムの候補推定機能が頑健であることが示された．
 
-本研究は健常者によるデータ収集に基づいており，実際の運動機能障害者による評価が今後の課題である．
-また，個々のユーザーの障害特性に適応する個人化機能の実装も必要である．
+\subsection{特徴量重要度分析}
+
+提案システムで設計した18次元の動的特徴量について，
+Permutation Importanceによる重要度分析を実施した．
+図\ref{fig:importance}にその結果を示す．
+分析の結果，指先の絶対座標（finger\_x: 0.507）と
+水平方向速度（vel\_x: 0.505）が圧倒的に高い重要度を示した．
+これは，キー入力意図の推定において，
+指先の水平方向の位置と動きが最も重要な情報源であることを示している．
+
+次いで重要度が高かったのは，
+垂直方向速度（vel\_y: 0.242），最近傍キー2への相対位置（rel\_key2\_y: 0.191），
+最近傍キー1への相対位置（rel\_key1\_x: 0.177）であった．
+一方，加速度（acc\_x, acc\_y），振幅（amplitude\_x, amplitude\_y），
+方向変化（direction\_change）の重要度はほぼゼロまたは負の値を示し，
+入力意図推定への寄与が極めて小さいことが明らかになった．
+
+この結果は，手指の「位置」と「速度」が入力意図推定の主要な情報であり，
+「加速度」や「揺れの振幅」といった高次の動的特徴は必ずしも必要ではないことを示唆している．
+ただし，これは健常者による学習データに基づく分析であり，
+実際の運動機能障害者のデータでは異なる傾向を示す可能性がある．
+特に，不随意運動の特性を捉えるためには，
+振幅や方向変化といった特徴が重要になる可能性も考えられる．
+
+\begin{figure}[tb]
+\centering
+\includegraphics[width=\linewidth]{importance.png}
+\caption{特徴量重要度分析結果（Permutation Importance）}
+\label{fig:importance}
+\end{figure}
+
+\subsection{システムの限界と今後の課題}
+
+本研究にはいくつかの限界がある．
+第一に，学習データおよび評価実験が健常者のみを対象としている点である．
+実際の運動機能障害者の手指軌跡は，
+不随意運動の種類や程度が個人によって大きく異なるため，
+本研究で得られた性能が直接適用できるとは限らない．
+今後，倫理審査を経た上で実際の障害者を対象とした評価実験を実施し，
+システムの実用性を検証する必要がある．
+
+第二に，個人化機能の欠如である．
+現状のシステムは単一の学習済みモデルを全ユーザーで共有しているが，
+個々のユーザーの入力特性に適応する個人化機能を実装することで，
+さらなる精度向上が期待できる．
+特に，少量の個人データを用いた転移学習やオンライン学習の導入が有効と考えられる．
+
+第三に，長文入力における評価が不十分である点である．
+本研究ではランダム文字列を用いた評価を中心に実施したが，
+実用場面では文脈を持つ長文の入力が必要となる．
+今後，言語モデルとの統合により，
+文脈情報を活用した入力支援の実現が課題となる．
 
 
-%7
+%6
 \section{おわりに}
 
 本研究では，運動機能障害者のキーボード入力を支援するため，
 カメラを用いた機械学習による入力意図推定システムを提案した．
-4点キャリブレーション，MediaPipeによる手の軌跡データ収集，18次元動的特徴量の設計，
-深層学習モデル（LSTM, CNN, GRU, TCN）による時系列学習という一連の処理により，
-震えを含む軌跡から直接的な意図推定を実現した．
+提案システムは，4点キャリブレーションによる座標変換，
+MediaPipeによる手指軌跡の取得，
+18次元動的特徴量の設計，
+GRUモデルによる可変長時系列学習により，
+不随意運動を伴う手指軌跡から入力意図を推定する．
 
-評価実験では，当初観測された学習結果と実使用環境の性能乖離という課題に対し，
-学習データの多様化というアプローチで解決を図った．
-その結果，検証データで86.9\%という高精度を達成し，リアルタイム予測においても実用レベルの性能向上を確認した．
-これにより，追加のハードウェアを必要としない低コストな入力支援システムの実現可能性を実証した．
+モデル比較実験では，LSTM，CNN，GRU，TCNの4種類を評価し，
+GRUがオフライン精度98.0\%，リアルタイム精度81.8\%と最も優れた性能を示した．
+実用性評価では，3種類の入力スタイル（丁寧入力，通常入力，摂動負荷入力）で評価を実施し，
+摂動負荷条件下においても誤入力時の救済率○○\%を達成した．
+これは，ユーザーが誤ったキーを押下した場合でも，
+システムが提示する上位3候補に正解が含まれることを示しており，
+運動機能障害者の入力効率を大幅に改善する可能性を示している．
 
-今後は，実際の運動機能障害者による評価実験，個人適応システムの開発を通じて，実用化に向けた研究を進める．
+また，特徴量重要度分析により，
+指先の位置と速度が入力意図推定の主要な情報源であることが明らかになった．
+これらの結果から，一般的なWebカメラのみで実現可能な
+低コストな入力支援システムの有効性が示された．
+
+今後の課題として，実際の運動機能障害者を対象とした評価実験の実施，
+個々のユーザーの障害特性に適応する個人化機能の開発，
+言語モデルとの統合による長文入力支援の実現が挙げられる．
 
 
 
@@ -410,13 +658,7 @@ CNNはパラメータ数が最小で学習速度が最も速いという利点�
 
 
 
-% 全引用を事前登録（BibTeX用）
-\nocite{webaim2023motor,cerebralpalsy2023tobii,reciteme2025assistive,
-cossovich2023co,abdallah2022light,le2023real,mallik2024virtual,
-rahimadvanced,araujo2023analysis,wu2022visual,wolke2025validity,
-yang2023learning,lei2022intention,pradeep2025real,gizatdinova2023vision,
-neog2024hand,ottoboni2022multifunctional,lugaresi2019mediapipe,
-zhang2020mediapipe,hochreiter1997long,cho2014learning,mackenzie2002text}
+% BibTeX使用（本文中の\citeで自動的に参照リストに追加される）
 
 \bibliographystyle{ipsjunsrt}
 \bibliography{references}
