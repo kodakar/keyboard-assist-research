@@ -215,3 +215,4 @@ dvipdfmx keyboard_assist.dvi
 echo "完了！"
 ```
 
+

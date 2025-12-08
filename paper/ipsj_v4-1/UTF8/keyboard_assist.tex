@@ -153,7 +153,7 @@ Yangら\cite{yang2023learning}はRNNを用いて上肢の運動開始を予測�
 推定結果はTop-3候補とその確率をリアルタイムで画面に表示する．
 
 \begin{figure}[tb]
-    \centering
+\centering
     \begin{tikzpicture}[
         node distance=0.4cm,
         block/.style={
@@ -202,8 +202,8 @@ Yangら\cite{yang2023learning}はRNNを用いて上肢の運動開始を予測�
     
     \end{tikzpicture}
     \caption{提案システムの処理フロー}
-    \label{fig:system}
-    \end{figure}
+\label{fig:system}
+\end{figure}
 
 %3.2
 \subsection{座標系の統一と正規化}
@@ -248,7 +248,7 @@ MediaPipeは軽量で処理速度が速く，一般的なWebカメラでも30fps
 本特徴量設計では，従来の静的な座標情報に加えて，手の動きの時間的変化と震え特性を包括的に捉えることで，
 運動機能障害者特有の複雑な動作パターンからの意図抽出を可能とする．
 
-図\ref{fig:feature_structure}に示すように，18次元の特徴量は，
+表\ref{tab:feature_structure}に示すように，18次元の特徴量は，
 （1）作業領域内での指先の正規化座標（2次元），
 （2）最近傍3キーへの相対座標（6次元），
 （3）最近傍3キーへの距離（3次元），
@@ -261,12 +261,21 @@ MediaPipeは軽量で処理速度が速く，一般的なWebカメラでも30fps
 これらの動的特徴量により，震え除去を行わずに生の軌跡データから直接学習することで，
 重要な意図情報の損失を防ぎつつ，ロバストな入力意図推定を実現する．
 
-\begin{figure}[tb]
-\centering
-\fbox{feature structure 18dim.png}
-\caption{18次元動的特徴量の構成}
-\label{fig:feature_structure}
-\end{figure}
+\begin{table}[tb]
+    \caption{18次元動的特徴量の構成}
+    \label{tab:feature_structure}
+    \centering
+    \begin{tabular}{lc}\hline\hline
+    特徴量カテゴリ & 次元数 \\\hline
+    指先の正規化座標 & 2 \\
+    最近傍3キーへの相対座標 & 6 \\
+    最近傍3キーへの距離 & 3 \\
+    速度・加速度 & 4 \\
+    振幅・方向転換頻度 & 3 \\
+    \hline
+    合計 & 18 \\\hline
+\end{tabular}
+\end{table}
 
 %3.5
 \subsection{GRUモデルによる入力意図推定}
@@ -322,7 +331,7 @@ a-z，0-9，スペースの37種類の文字を均等に含み
 
 \begin{figure}[tb]
 \centering
-\fbox{data collection setup.png}
+\includegraphics[width=\columnwidth]{data_collection_setup.png}
 \caption{データ収集の実験環境}
 \label{fig:data_collection_setup}
 \end{figure}
@@ -354,7 +363,7 @@ a-z，0-9，スペースの37種類の文字を均等に含み
 以下の評価指標を用いた．
 
 \textbf{オフライン評価:}
-学習済みモデルをテストセット（950サンプル）で評どの情報機器は，現代社会において不可欠なコミュニケーション手段である．価し，
+学習済みモデルをテストセット（950サンプル）で評価し，
 以下の指標を測定した．
 
 \begin{itemize}
@@ -388,9 +397,9 @@ a-z，0-9，スペースの37種類の文字を均等に含み
 
 まず，テストセットを用いたオフライン評価を行い，
 各モデルの基本的な認識性能を測定した．
-図\ref{fig:learning_curves}に各モデルの学習曲線を示す．
-いずれのモデルも訓練損失と検証損失が安定して収束しており，
-適切に学習できていることが確認できる．
+図\ref{fig:learning_curves}にGRUモデルの学習曲線を示す．
+訓練損失と検証損失が安定して収束しており，
+過学習を起こさず適切に学習できていることが確認できる．
 表\ref{tab:offline_performance}に示すように，
 GRUがTop-1精度98.0\%と最も高い性能を達成した．
 また，GRUはパラメータ数が約167Kと4モデル中最小であり，
@@ -427,13 +436,6 @@ TCN & 約209K & 94.21\% & 99.47\% \\\hline
 \includegraphics[width=\linewidth]{learning_curves.png}
 \caption{GRUモデルの学習曲線}
 \label{fig:learning_curves}
-\end{figure}
-
-\begin{figure}[tb]
-\centering
-\fbox{per class accuracy.png}
-\caption{クラス別認識精度}
-\label{fig:per_class_accuracy}
 \end{figure}
 
 次に，実環境での性能を検証するため，
