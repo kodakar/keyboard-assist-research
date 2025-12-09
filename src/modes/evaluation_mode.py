@@ -498,7 +498,17 @@ class EvaluationMode:
                         'actual_input': actual_input,
                         'is_correct': is_correct,
                         'input_time': input_time,
-                        'timestamp': datetime.now().isoformat()
+                        'timestamp': datetime.now().isoformat(),
+                        # 軌跡データを保存（検証用）
+                        'trajectory_data': [
+                            {
+                                'frame_idx': i,
+                                'finger_x': float(point['work_area_coords']['index_finger']['x']),
+                                'finger_y': float(point['work_area_coords']['index_finger']['y'])
+                            }
+                            for i, point in enumerate(list(self.trajectory_buffer))
+                        ],
+                        'trajectory_length': len(self.trajectory_buffer)
                     }
                     
                     self.current_inputs.append(input_log)

@@ -218,7 +218,7 @@ Yangら\cite{yang2023learning}はRNNを用いて上肢の運動開始を予測�
 
 \begin{figure}[tb]
 \centering
-\includegraphics[width=\columnwidth]{keyboard_mapping.png}
+\includegraphics[width=0.9\columnwidth]{keyboard_mapping.png}
 \caption{4点キャリブレーションによる座標系変換の例}
 \label{fig:keyboard_mapping}
 \end{figure}
@@ -321,8 +321,6 @@ a-z，0-9，スペースの37種類の文字を均等に含み
 各キー入力時の指先軌跡は可変長（5フレーム〜90フレーム）で記録した．
 これは，キー押下直前の軌跡長が入力速度によって異なるためであり，
 速い入力から遅い入力まで柔軟に対応できる．
-図\ref{fig:trajectory_distribution}に軌跡長の分布を示す．
-データセット全体で多様な入力速度が含まれていることが確認できる．
 
 収集したデータセットは，
 訓練用（60\%，2,850サンプル），
@@ -331,16 +329,9 @@ a-z，0-9，スペースの37種類の文字を均等に含み
 
 \begin{figure}[tb]
 \centering
-\includegraphics[width=\columnwidth]{data_collection_setup.png}
+\includegraphics[width=0.9\columnwidth]{data_collection_setup.png}
 \caption{データ収集の実験環境}
 \label{fig:data_collection_setup}
-\end{figure}
-
-\begin{figure}[tb]
-\centering
-\fbox{trajectory length distribution.png}
-\caption{可変長軌跡データの分布}
-\label{fig:trajectory_distribution}
 \end{figure}
 
 \subsubsection{学習条件}
@@ -426,14 +417,14 @@ TCN & 約209K & 94.21\% & 99.47\% \\\hline
 
 \begin{figure}[tb]
 \centering
-\includegraphics[width=\columnwidth]{confusion_matrix.png}
+\includegraphics[width=0.9\columnwidth]{confusion_matrix.png}
 \caption{GRUモデルの混同行列（テストセット）}
 \label{fig:confusion_matrix}
 \end{figure}
 
 \begin{figure}[tb]
 \centering
-\includegraphics[width=\linewidth]{learning_curves.png}
+\includegraphics[width=0.9\linewidth]{learning_curves.png}
 \caption{GRUモデルの学習曲線}
 \label{fig:learning_curves}
 \end{figure}
@@ -444,11 +435,11 @@ TCN & 約209K & 94.21\% & 99.47\% \\\hline
 システムは各キー入力に対してTop-3候補を確率とともに提示し，
 ユーザーは第1候補が誤っている場合でも候補から選択できる仕組みとなっている．
 表\ref{tab:realtime_performance}に示すように，
-GRUがTop-1精度81.8\%，Top-3精度100.0\%と最も優れた性能を示した．
-オフライン評価と比較してTop-1精度は約16ポイント低下したが，
-Top-3精度が100\%であることから，
-正解が常に上位3候補に含まれており，
-候補提示による入力支援が有効に機能することが確認された．
+GRUがTop-1精度100.0\%，Top-3精度100.0\%と最も優れた性能を示した．
+LSTMもTop-1精度81.8\%，Top-3精度100.0\%と高い性能を達成したが，
+GRUはオフライン評価（98.0\%）を上回る完璧な認識精度を実現した．
+一方，CNNとTCNはTop-1精度がそれぞれ36.4\%，63.6\%にとどまり，
+リアルタイム環境での性能が大幅に低下した．
 この結果に基づき，入力意図推定モデルとしてGRUを採用した（3.5節）．
 
 \begin{table}[tb]
@@ -457,16 +448,16 @@ Top-3精度が100\%であることから，
 \centering
 \begin{tabular}{lccc}\hline\hline
 モデル & Top-1精度 & Top-3精度 & WPM \\\hline
-LSTM & 72.7\% & 81.8\% & 71.0 \\
-CNN & 45.5\% & 54.5\% & 61.6 \\
-GRU & \textbf{81.8\%} & \textbf{100.0\%} & \textbf{69.9} \\
-TCN & 36.4\% & 45.5\% & 48.5 \\\hline
+LSTM & 81.8\% & 100.0\% & 43.6 \\
+CNN & 36.4\% & 90.9\% & \textbf{47.7} \\
+GRU & \textbf{100.0\%} & \textbf{100.0\%} & 41.8 \\
+TCN & 63.6\% & 72.7\% & 45.5 \\\hline
 \end{tabular}
 \end{table}
 
 \begin{figure}[tb]
 \centering
-\fbox{realtime prediction screen.png}
+\includegraphics[width=0.9\columnwidth]{realtime_prediction.png}
 \caption{リアルタイム予測画面の例（GRUモデル）}
 \label{fig:realtime_prediction}
 \end{figure}
@@ -479,27 +470,16 @@ TCN & 36.4\% & 45.5\% & 48.5 \\\hline
 37種類の全文字が均等に含まれるランダム文字列を入力テキストとして用いることで，
 純粋なシステムの性能を測定した．
 また，異なる入力状況下での性能を検証するため，
-丁寧入力，通常入力，摂動負荷入力の3種類の入力スタイルを設定した．
-丁寧入力では，被験者にゆっくり正確な入力を求めることで，
-システムが達成可能な性能上限を確認した．
-通常入力では，日常的な入力速度を想定した標準的な入力を行わせることで，
-実用的な環境下での性能を評価した．
-摂動負荷入力では，
-図\ref{fig:perturbation_setup}に示すように，
-被験者の手首に紐を取り付けキー押下直前に引っ張ることで物理的な摂動を加え，
+通常入力と振戦模擬入力の2種類の条件を設定した．
+通常入力では，被験者が自然な速度で入力を行い，
+標準的な使用状況下でのシステム性能を評価した．
+振戦模擬入力では，入力作業中，常に手を揺らすよう被験者に指示し，
 不随意運動による入力の揺らぎを模擬した条件下でのシステムの頑健性を検証した．
 
-\begin{figure}[tb]
-\centering
-\fbox{perturbation setup.png}
-\caption{摂動負荷入力の実験セットアップ}
-\label{fig:perturbation_setup}
-\end{figure}
-
 表\ref{tab:usability}に被験者○名の平均性能を示す．
-丁寧入力ではTop-1精度○○\%と高い精度を達成した．
-通常入力ではTop-1精度○○\%を維持し，実用的な速度での入力が可能であった．
-摂動負荷入力ではTop-1精度が○○\%に低下したものの，
+通常入力ではTop-1精度○○\%，Top-3精度○○\%を達成し，
+システムがリアルタイムで動作することを確認した．
+振戦模擬入力ではTop-1精度が○○\%に低下したものの，
 Top-3精度は○○\%を維持し，
 誤入力時の救済率は○○\%を示した．
 この救済率は，ユーザーが誤ったキーを押下した場合でも，
@@ -509,21 +489,17 @@ Top-3精度は○○\%を維持し，
 \caption{入力スタイル別性能評価（被験者○名の平均）}
 \label{tab:usability}
 \centering
-\small
-\begin{tabular}{lcccc}\hline\hline
-入力スタイル & Top-1 & Top-3 & 時間 & WPM \\\hline
-丁寧入力 & 91.9\% & 100.0\% & 2.2秒 & 27.2 \\
-通常入力 & 81.1\% & 100.0\% & 1.4秒 & 44.0 \\
-摂動負荷入力 & 76.7\% & 93.0\% & 1.7秒 & 34.5 \\
-\hline
-\multicolumn{5}{l}{\small 摂動負荷入力時の救済率: 73.5\%} \\
+\begin{tabular}{lccc}\hline\hline
+入力スタイル & Top-1精度 & Top-3精度 & 救済率 \\\hline
+通常入力 & ○○\% & ○○\% & --- \\
+振戦模擬入力 & ○○\% & ○○\% & ○○\% \\
 \hline
 \end{tabular}
 \end{table}
 
 以上の評価実験により，
 提案システムが異なる入力状況下においても実用的な性能を持つことが確認された．
-特に，摂動負荷条件下においても高い救済率を達成したことから，
+特に，振戦を模擬した条件下においても高い救済率を達成したことから，
 運動機能障害者のキーボード入力を支援する有効な手段となり得ることが示された．
 
 
@@ -533,12 +509,12 @@ Top-3精度は○○\%を維持し，
 \subsection{モデル選択の妥当性}
 
 4.2節のモデル比較実験では，LSTM，CNN，GRU，TCNの4種類を評価した結果，
-GRUがオフライン精度98.0\%，リアルタイム精度81.8\%と最も優れた性能を示した．
-LSTMもオフライン精度97.5\%と高精度を達成したが，
+GRUがオフライン精度98.0\%，リアルタイム精度100.0\%と最も優れた性能を示した．
+LSTMもオフライン精度97.5\%，リアルタイム精度81.8\%と高精度を達成したが，
 パラメータ数がGRUの約1.3倍（219K vs 167K）であり，
 学習時間およびリアルタイム推論速度の面でGRUが優位であった．
 CNNとTCNはオフライン精度がそれぞれ93.6\%，94.2\%にとどまり，
-特にリアルタイム評価ではCNN 45.5\%，TCN 36.4\%と大幅に性能が低下した．
+特にリアルタイム評価ではCNN 36.4\%，TCN 63.6\%と大幅に性能が低下した．
 これは，畳み込み層による局所的な特徴抽出が，
 可変長の時系列パターン全体を捉える上で不十分であったためと考えられる．
 
@@ -551,14 +527,12 @@ LSTMよりも少ないパラメータで効率的に時系列依存関係を学�
 \subsection{実用性評価の考察}
 
 4.3節の実用性評価では，
-丁寧入力，通常入力，摂動負荷入力の3種類の入力スタイルで評価を実施した．
-丁寧入力でTop-1精度○○\%を達成したことから，
-システムの理論的な性能上限が十分に高いことが確認された．
-通常入力でTop-1精度○○\%を維持できたことは，
-実用的な入力速度においてもシステムが有効に機能することを示している．
+通常入力と振戦模擬入力の2種類の条件で評価を実施した．
+通常入力でTop-1精度○○\%，Top-3精度○○\%を達成し，
+システムが実用的な入力速度において有効に機能することが確認された．
 
-特筆すべきは，摂動負荷入力における救済効果である．
-物理的な摂動により意図的に入力の揺らぎを発生させた条件下では，
+特筆すべきは，振戦模擬入力における救済効果である．
+入力作業中、常に手を揺らすことで不随意運動を模擬した条件下では，
 Top-1精度が○○\%に低下したものの，
 Top-3精度は○○\%を維持し，
 誤入力時の救済率は○○\%を達成した．
@@ -567,7 +541,7 @@ Top-3精度は○○\%を維持し，
 運動機能障害者の支援においては，
 この「候補提示による救済機能」が入力効率を大幅に改善する可能性がある．
 
-また，3種類の入力スタイル間でTop-3精度がTop-1精度に比べて相対的に高い値を維持していることから，
+両条件においてTop-3精度がTop-1精度に比べて高い値を維持していることから，
 提案システムの候補推定機能が頑健であることが示された．
 
 \subsection{特徴量重要度分析}
@@ -596,7 +570,7 @@ Permutation Importanceによる重要度分析を実施した．
 
 \begin{figure}[tb]
 \centering
-\includegraphics[width=\linewidth]{importance.png}
+\includegraphics[width=0.9\linewidth]{importance.png}
 \caption{特徴量重要度分析結果（Permutation Importance）}
 \label{fig:importance}
 \end{figure}
@@ -633,12 +607,12 @@ Permutation Importanceによる重要度分析を実施した．
 MediaPipeによる手指軌跡の取得，
 18次元動的特徴量の設計，
 GRUモデルによる可変長時系列学習により，
-不随意運動を伴う手指軌跡から入力意図を推定する．
+不随意運動を伴う軌跡から入力意図を推定する．
 
 モデル比較実験では，LSTM，CNN，GRU，TCNの4種類を評価し，
-GRUがオフライン精度98.0\%，リアルタイム精度81.8\%と最も優れた性能を示した．
-実用性評価では，3種類の入力スタイル（丁寧入力，通常入力，摂動負荷入力）で評価を実施し，
-摂動負荷条件下においても誤入力時の救済率○○\%を達成した．
+GRUがオフライン精度98.0\%，リアルタイム精度100.0\%と最も優れた性能を示した．
+実用性評価では，通常入力と振戦模擬入力の2条件で評価を実施し，
+振戦を模擬した条件下においても誤入力時の救済率○○\%を達成した．
 これは，ユーザーが誤ったキーを押下した場合でも，
 システムが提示する上位3候補に正解が含まれることを示しており，
 運動機能障害者の入力効率を大幅に改善する可能性を示している．
