@@ -631,7 +631,36 @@ class EvaluationMode:
         # 現在の文字
         if current_char < len(target_text):
             target_char = target_text[current_char]
-            cv2.putText(frame, f"Next: '{target_char}' ({current_char + 1}/{total_chars})", 
+            # 視認性向上: 紛らわしい文字をラベル付きで表示
+            if target_char == " ":
+                display_char = "SPACE"
+            elif target_char == "0":
+                display_char = "0 (ZERO)"
+            elif target_char.lower() == "o":
+                display_char = "O (OH)"
+            elif target_char == "1":
+                display_char = "1 (ONE)"
+            elif target_char.lower() == "l":
+                display_char = "L (ELL)"
+            elif target_char.lower() == "i":
+                display_char = "I (EYE)"
+            elif target_char == "5":
+                display_char = "5 (FIVE)"
+            elif target_char.lower() == "s":
+                display_char = "S (ESS)"
+            elif target_char == "8":
+                display_char = "8 (EIGHT)"
+            elif target_char == "9":
+                display_char = "9 (NINE)"
+            elif target_char.lower() == "b":
+                display_char = "B (BEE)"
+            elif target_char == "2":
+                display_char = "2 (TWO)"
+            elif target_char.lower() == "z":
+                display_char = "Z (ZEE)"
+            else:
+                display_char = target_char.upper()
+            cv2.putText(frame, f"Next: '{display_char}' ({current_char + 1}/{total_chars})", 
                        (x1 + 10, y1 + 50), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
         else:
             cv2.putText(frame, "Task Complete!", (x1 + 10, y1 + 50), 
