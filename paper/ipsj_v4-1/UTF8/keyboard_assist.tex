@@ -47,8 +47,9 @@ Information Systems and Multimedia Design, Graduate School of Science and Techno
 本研究では，汎用的な卓上USBカメラのみを用いて手指動作から入力意図を推定するシステムを提案する．
 提案システムでは，MediaPipeによる手部ランドマーク検出を基盤とし，位置座標，速度，加速度，震えの振幅や方向転換頻度など18次元の動的特徴量を抽出することで運動特性を定量化した．
 これらの特徴量を可変長に対応したGRUモデルに入力し，37クラスのキー入力意図を推定するアーキテクチャを構築した．
-評価実験において，オフラインでTop-1精度98.0\%，リアルタイム環境で丁寧な入力時に91.9\%を達成した．
-特に，震えを伴う入力では79.1\%で誤入力が発生したが，そのうち73.5\%で手指軌跡から正しい意図を推定でき，不随意運動下における入力補正の有効性が確認された．
+評価実験において，オフラインでTop-1精度98.0\%を達成し，被験者10名によるリアルタイム評価では通常入力で平均83.8\%を記録した．
+特に，震えを伴う入力では96.5\%で誤入力が発生したが，システムは64.9\%の試行で正しい意図を推定でき，
+不随意運動下における入力補正の有効性が確認された．
 本システムは追加ハードウェアを必要とせず，低コストで運動機能障害者のデジタルアクセシビリティ向上に貢献する．
 \end{abstract}
 
@@ -219,7 +220,7 @@ Yangら\cite{yang2023learning}はRNNを用いて上肢の運動開始を予測�
 
 \begin{figure}[tb]
 \centering
-\includegraphics[width=0.9\columnwidth]{keyboard_mapping.png}
+\includegraphics[width=0.8\columnwidth]{keyboard_mapping.png}
 \caption{4点キャリブレーションによる座標系変換の例}
 \label{fig:keyboard_mapping}
 \end{figure}
@@ -284,13 +285,11 @@ MediaPipeは軽量で処理速度が速く，一般的なWebカメラでも30fps
 前節で設計した18次元の動的特徴量シーケンスから入力意図を推定するため，
 本研究ではGRU\cite{cho2014learning}を採用した．
 指先の軌跡は時間的に連続した動きであり，
-震えを含む複雑な動作パターンから入力意図を推定するには時間的文脈を学習できるモデルが必要である．
-そこで，代表的な時系列モデルである
-Long Short-Term Memory（LSTM）\cite{hochreiter1997long}，
+震えを含む複雑な動作パターンから入力意図を推定するには時間的文脈を学習できるモデルが必要であるためである．
+なお，Long Short-Term Memory（LSTM）\cite{hochreiter1997long}，
 1次元畳み込みニューラルネットワーク（CNN），
-Gated Recurrent Unit（GRU），
-Temporal Convolutional Network（TCN）\cite{bai2018empirical}の
-4種類を比較した結果，GRUが最も優れた性能を示した（4.2節）．
+Temporal Convolutional Network（TCN）\cite{bai2018empirical}との
+比較検証については4.2節で後述する．
 
 GRUはLSTMと同等の長期依存関係学習能力を持ちながら
 パラメータ数が約24\%少なく学習・推論ともに高速であるため，
@@ -330,7 +329,7 @@ a-z，0-9，スペースの37種類の文字を均等に含み
 
 \begin{figure}[tb]
 \centering
-\includegraphics[width=0.9\columnwidth]{data_collection_setup.png}
+\includegraphics[width=0.8\columnwidth]{data_collection_setup.png}
 \caption{データ収集の実験環境}
 \label{fig:data_collection_setup}
 \end{figure}
@@ -418,20 +417,20 @@ TCN & 約209K & 94.21\% & 99.47\% \\\hline
 
 \begin{figure}[tb]
 \centering
-\includegraphics[width=0.9\columnwidth]{confusion_matrix.png}
+\includegraphics[width=0.8\columnwidth]{confusion_matrix.png}
 \caption{GRUモデルの混同行列（テストセット）}
 \label{fig:confusion_matrix}
 \end{figure}
 
 \begin{figure}[tb]
 \centering
-\includegraphics[width=0.9\linewidth]{learning_curves.png}
+\includegraphics[width=0.8\linewidth]{learning_curves.png}
 \caption{GRUモデルの学習曲線}
 \label{fig:learning_curves}
 \end{figure}
 
-次に，実環境での性能を検証するため，
-被験者が「hello world」を実際に入力するリアルタイム評価を行った．
+次に，システムの基本動作を確認する予備実験として，
+研究者本人が「hello world」を実際に入力するリアルタイム評価を行った．
 図\ref{fig:realtime_prediction}に実際のリアルタイム予測画面を示す．
 システムは各キー入力に対してTop-3候補を確率とともに提示し，
 ユーザーは第1候補が誤っている場合でも候補から選択できる仕組みとなっている．
@@ -441,7 +440,8 @@ LSTMもTop-1精度81.8\%，Top-3精度100.0\%と高い性能を達成したが�
 GRUはオフライン評価（98.0\%）を上回る完璧な認識精度を実現した．
 一方，CNNとTCNはTop-1精度がそれぞれ36.4\%，63.6\%にとどまり，
 リアルタイム環境での性能が大幅に低下した．
-この結果に基づき，入力意図推定モデルとしてGRUを採用した（3.5節）．
+この予備実験の結果に基づき，入力意図推定モデルとしてGRUを採用し，
+次節の実用性評価を実施した．
 
 \begin{table}[tb]
 \caption{モデル別リアルタイム性能評価}
@@ -458,7 +458,7 @@ TCN & 63.6\% & 72.7\% & 45.5 \\\hline
 
 \begin{figure}[tb]
 \centering
-\includegraphics[width=0.9\columnwidth]{realtime_prediction.png}
+\includegraphics[width=0.8\columnwidth]{realtime_prediction.png}
 \caption{リアルタイム予測画面の例（GRUモデル）}
 \label{fig:realtime_prediction}
 \end{figure}
@@ -537,8 +537,9 @@ LSTMよりも少ないパラメータで効率的に時系列依存関係を学�
 特筆すべきは，振戦模擬入力における救済効果である．
 打鍵直前に手を瞬間的に動かすことで不随意運動を模擬した条件下では，
 Top-1精度が64.9\%に低下したものの，
-Top-3精度は90.0\%を維持し，
-誤入力時の救済率（自動補正率）は65.0\%を達成した．
+Top-3精度は90.0\%を維持した．
+前述の通り，本条件では9割以上の入力で誤打鍵が発生しているため，
+Top-1精度は実質的な自動補正率（救済率）とみなすことができる．
 これは，ユーザーが誤ったキーを押下した場合でも，
 半数以上の確率でシステムが即座に正解を入力できることを意味する．
 さらに，Top-3精度が高いことから，
@@ -576,7 +577,7 @@ Permutation Importanceによる重要度分析を実施した．
 
 \begin{figure}[tb]
 \centering
-\includegraphics[width=0.9\linewidth]{importance.png}
+\includegraphics[width=0.8\linewidth]{importance.png}
 \caption{特徴量重要度分析結果（Permutation Importance）}
 \label{fig:importance}
 \end{figure}
@@ -595,7 +596,7 @@ Permutation Importanceによる重要度分析を実施した．
 現状のシステムは単一の学習済みモデルを全ユーザーで共有しているが，
 個々のユーザーの入力特性に適応する個人化機能を実装することで，
 さらなる精度向上が期待できる．
-特に，少量の個人データを用いた転移学習やオンライン学習の導入が有効と考えられる．
+特に，少量の個人データを用いた転移学習等の導入が有効と考えられる．
 
 第三に，長文入力における評価が不十分である点である．
 本研究ではランダム文字列を用いた評価を中心に実施したが，
@@ -616,9 +617,9 @@ GRUモデルによる可変長時系列学習により，
 不随意運動を伴う軌跡から入力意図を推定する．
 
 モデル比較実験では，LSTM，CNN，GRU，TCNの4種類を評価し，
-GRUがオフライン精度98.0\%，リアルタイム精度100.0\%（予備実験）と最も優れた性能を示した．
+GRUがオフライン精度98.0\%と最も優れた性能を示した．
 実用性評価では，通常入力と振戦模擬入力の2条件で評価を実施し，
-振戦を模擬した条件下においても誤入力時の救済率65.0\%，Top-3精度90.0\%を達成した．
+振戦を模擬した条件下においてもTop-1精度64.9\%（実質的な救済率），Top-3精度90.0\%を達成した．
 これは，ユーザーが誤ったキーを押下した場合でも，
 システムが高い確率で正しい入力意図を推定（自動補正または候補提示）できることを示しており，
 運動機能障害者の入力効率を大幅に改善する可能性を示している．
