@@ -33,20 +33,18 @@
 
 \title{卓上カメラによる指先動作認識を用いた\\運動機能障害者のためのAIキーボード入力支援システム}
 
-\etitle{AI Keyboard Input Assistance System for Individuals\\with Motor Disabilities Using Finger Motion Recognition via a Tabletop Camera}
-
 \affiliate{TDU}{東京電機大学大学院 未来科学研究科 情報メディア学専攻\\
 Information Systems and Multimedia Design, Graduate School of Science and Technology for Future Life, Tokyo Denki University}
 
 
-\author{小高 大和}{Kodaka Yamato}{TDU}[kodak@cps.im.dendai.ac.jp]
+\author{小高 大和}{Kodaka Yamato}{TDU}
 \author{岩井 将行}{Iwai Masayuki}{TDU}
 
 \begin{abstract}
 運動機能障害者における手指の震えや不随意運動は，従来のキーボード入力を困難にし，デジタルアクセスの格差を生む要因となっている．
 本研究では，汎用的な卓上USBカメラのみを用いて手指動作から入力意図を推定するシステムを提案する．
 提案システムでは，MediaPipeによる手部ランドマーク検出を基盤とし，位置座標，速度，加速度，震えの振幅や方向転換頻度など18次元の動的特徴量を抽出することで運動特性を定量化した．
-これらの特徴量を可変長に対応したGRUモデルに入力し，37クラスのキー入力意図を推定するアーキテクチャを構築した．
+これらの特徴量を可変長に対応したGated Recurrent Unit（GRU）モデルに入力し，37クラスのキー入力意図を推定するアーキテクチャを構築した．
 評価実験において，オフラインでTop-1精度98.0\%を達成し，被験者10名によるリアルタイム評価では通常入力で平均83.8\%を記録した．
 特に，震えを伴う入力では96.5\%で誤入力が発生したが，システムは64.9\%の試行で正しい意図を推定でき，
 不随意運動下における入力補正の有効性が確認された．
@@ -106,7 +104,7 @@ Cossovichら\cite{cossovich2023co}は運動機能障害者へのインタビュ�
 一方，カメラベースの手認識技術は追加ハードウェアなしに実現できる可能性がある．
 Pradeepら\cite{pradeep2025real}はWebカメラによる顔追跡とニューラルネットワークを組み合わせたハンズフリーマウス制御システムを開発し，運動機能障害者が頭部の動きでマウスカーソルを操作できることを実証した．
 また，Abdallahら\cite{abdallah2022light}はMediaPipe\cite{lugaresi2019mediapipe}とGRU/CNNを組み合わせた手話認識で99.84\%の精度を達成し，Leら\cite{le2023real}はYOLOv7による一人称視点からの手動作検出で95\%以上の精度を報告している．
-キーボード入力への応用としては，Mallikら\cite{mallik2024virtual}がMediaPipe HolisticとLSTMにより仮想キーボードを実装し97\%の認識精度を達成，Rahimら\cite{rahimadvanced}は1D CNNとBi-GRUを組み合わせたCronoNetで多言語対応の仮想キーボードを開発した．
+キーボード入力への応用としては，Mallikら\cite{mallik2024virtual}がMediaPipe Holistic\cite{zhang2020mediapipe}とLong Short-Term Memory（LSTM）により仮想キーボードを実装し97\%の認識精度を達成，Rahimら\cite{rahimadvanced}は1D CNNとBi-GRUを組み合わせたCronoNetで多言語対応の仮想キーボードを開発した．
 しかし，これらの研究は健常者の安定した動作を前提としており，震えや不随意運動を伴う入力への対応は考慮されていない．
 運動機能障害者がこれらのシステムを利用するには，不規則な動作パターンからでも入力意図を推定できる手法が必要となる．
 
@@ -115,13 +113,13 @@ Pradeepら\cite{pradeep2025real}はWebカメラによる顔追跡とニューラ
 
 運動機能障害に伴う震えの補正技術については，信号処理や機械学習を用いた研究が進められている．
 Araújoら\cite{araujo2023analysis}は生理的振戦とパーキンソン病による病的振戦の両方に対してFx-LMSアルゴリズムを評価し，特に病的振戦に対して優れた補正性能を示した．
-Wuら\cite{wu2022visual}はLeap Motionセンサーを用いたジェスチャー予測において，Kalmanフィルタによる震え補正とLSTM-RNNの組み合わせにより99.31\%の精度を達成している．
-Wolkeら\cite{wolke2025validity}はMediaPipeを用いた振戦の定量的評価手法を提案し，スマートフォンカメラでも臨床的に有効な精度が得られることを示した．
+Wuら\cite{wu2022visual}はLeap Motionセンサーを用いたジェスチャー予測において，Kalmanフィルタによる震え補正とLSTM\cite{hochreiter1997long}-再帰型ニューラルネットワーク（RNN）の組み合わせにより99.31\%の精度を達成している．
+Wolkeら\cite{wolke2025validity}はMediaPipe\cite{lugaresi2019mediapipe}を用いた振戦の定量的評価手法を提案し，スマートフォンカメラでも臨床的に有効な精度が得られることを示した．
 Neogら\cite{neog2024hand}は3D手部ランドマーク検出を用いた手機能評価システムにより，仮想環境でのリハビリテーション効果を示した．
 これらの研究では，震えを信号処理により除去または補正するアプローチが主流である．
 また，震えを補正すべきノイズとして扱う研究が多く，震えを個人の特性として学習するアプローチは十分に検討されていない．
 
-一方，時系列データからの運動意図推定では，Long Short-Term Memory（LSTM）\cite{hochreiter1997long}やGated Recurrent Unit（GRU）\cite{cho2014learning}などの再帰型ニューラルネットワークが広く用いられている．
+一方，時系列データからの運動意図推定では，LSTM\cite{hochreiter1997long}やGRU\cite{cho2014learning}などの再帰型ニューラルネットワークが広く用いられている．
 Leiら\cite{lei2022intention}はロボット車椅子のナビゲーションにおいて意図予測ベースの共有制御システムを提案し，脳性麻痺患者において従来手法より約30\%タスク完了時間を短縮した．
 Yangら\cite{yang2023learning}はRNNを用いて上肢の運動開始を予測し，支援ロボットの制御に応用した．
 しかし，これらの意図推定研究は特殊センサーやロボットアームを前提としており，汎用カメラを用いたキーボード入力支援への適用例は見られない．
@@ -220,7 +218,7 @@ Yangら\cite{yang2023learning}はRNNを用いて上肢の運動開始を予測�
 
 \begin{figure}[tb]
 \centering
-\includegraphics[width=0.8\columnwidth]{keyboard_mapping.png}
+\includegraphics[width=0.9\columnwidth]{keyboard_mapping.png}
 \caption{4点キャリブレーションによる座標系変換の例}
 \label{fig:keyboard_mapping}
 \end{figure}
@@ -286,7 +284,7 @@ MediaPipeは軽量で処理速度が速く，一般的なWebカメラでも30fps
 本研究ではGRU\cite{cho2014learning}を採用した．
 指先の軌跡は時間的に連続した動きであり，
 震えを含む複雑な動作パターンから入力意図を推定するには時間的文脈を学習できるモデルが必要であるためである．
-なお，Long Short-Term Memory（LSTM）\cite{hochreiter1997long}，
+なお，LSTM\cite{hochreiter1997long}，
 1次元畳み込みニューラルネットワーク（CNN），
 Temporal Convolutional Network（TCN）\cite{bai2018empirical}との
 比較検証については4.2節で後述する．
@@ -329,7 +327,7 @@ a-z，0-9，スペースの37種類の文字を均等に含み
 
 \begin{figure}[tb]
 \centering
-\includegraphics[width=0.8\columnwidth]{data_collection_setup.png}
+\includegraphics[width=0.9\columnwidth]{data_collection_setup.png}
 \caption{データ収集の実験環境}
 \label{fig:data_collection_setup}
 \end{figure}
@@ -417,14 +415,14 @@ TCN & 約209K & 94.21\% & 99.47\% \\\hline
 
 \begin{figure}[tb]
 \centering
-\includegraphics[width=0.8\columnwidth]{confusion_matrix.png}
+\includegraphics[width=0.9\columnwidth]{confusion_matrix.png}
 \caption{GRUモデルの混同行列（テストセット）}
 \label{fig:confusion_matrix}
 \end{figure}
 
 \begin{figure}[tb]
 \centering
-\includegraphics[width=0.8\linewidth]{learning_curves.png}
+\includegraphics[width=1.0\linewidth]{learning_curves.png}
 \caption{GRUモデルの学習曲線}
 \label{fig:learning_curves}
 \end{figure}
@@ -458,7 +456,7 @@ TCN & 63.6\% & 72.7\% & 45.5 \\\hline
 
 \begin{figure}[tb]
 \centering
-\includegraphics[width=0.8\columnwidth]{realtime_prediction.png}
+\includegraphics[width=1.0\columnwidth]{realtime_prediction.png}
 \caption{リアルタイム予測画面の例（GRUモデル）}
 \label{fig:realtime_prediction}
 \end{figure}
@@ -577,7 +575,7 @@ Permutation Importanceによる重要度分析を実施した．
 
 \begin{figure}[tb]
 \centering
-\includegraphics[width=0.8\linewidth]{importance.png}
+\includegraphics[width=1.0\linewidth]{importance.png}
 \caption{特徴量重要度分析結果（Permutation Importance）}
 \label{fig:importance}
 \end{figure}
