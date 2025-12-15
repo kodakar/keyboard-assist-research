@@ -78,7 +78,7 @@ Information Systems and Multimedia Design, Graduate School of Science and Techno
 現代社会において情報アクセスやコミュニケーションに不可欠なツールとなっている．
 しかし，脳性麻痺，本態性振戦，パーキンソン病などの神経疾患や加齢に伴う運動機能の低下により，手の震えや不随意運動を持つ人々にとって，キーボードによる正確な文字入力は困難であり，デジタル社会への参加を阻む障壁となる．
 
-運動機能障害者向けの入力支援技術として，音声入力\cite{webaim2023motor}，視線入力\cite{cerebralpalsy2023tobii}，特殊キーボード\cite{reciteme2025assistive}などが開発されてきた．
+運動機能障害者向けの入力支援技術として，音声入力，視線入力，特殊キーボードなどが開発されてきた．
 しかし，音声入力は構音障害を伴う場合に利用できず，視線入力や特殊デバイスは高価で導入のハードルが高い．
 また，これらの技術は個人の障害特性に合わせた調整が必要であり，手軽に利用を開始できないという課題がある．
 
@@ -103,8 +103,8 @@ Cossovichら\cite{cossovich2023co}は運動機能障害者へのインタビュ�
 
 一方，カメラベースの手認識技術は追加ハードウェアなしに実現できる可能性がある．
 Pradeepら\cite{pradeep2025real}はWebカメラによる顔追跡とニューラルネットワークを組み合わせたハンズフリーマウス制御システムを開発し，運動機能障害者が頭部の動きでマウスカーソルを操作できることを実証した．
-また，Abdallahら\cite{abdallah2022light}はMediaPipe\cite{lugaresi2019mediapipe}とGRU/CNNを組み合わせた手話認識で99.84\%の精度を達成し，Leら\cite{le2023real}はYOLOv7による一人称視点からの手動作検出で95\%以上の精度を報告している．
-キーボード入力への応用としては，Mallikら\cite{mallik2024virtual}がMediaPipe Holistic\cite{zhang2020mediapipe}とLong Short-Term Memory（LSTM）により仮想キーボードを実装し97\%の認識精度を達成，Rahimら\cite{rahimadvanced}は1D CNNとBi-GRUを組み合わせたCronoNetで多言語対応の仮想キーボードを開発した．
+また，Abdallahら\cite{abdallah2022light}はMediaPipeとGRU/CNNを組み合わせた手話認識で99.84\%の精度を達成し，Leら\cite{le2023real}はYOLOv7による一人称視点からの手動作検出で95\%以上の精度を報告している．
+キーボード入力への応用としては，Mallikら\cite{mallik2024virtual}がMediaPipe HolisticとLong Short-Term Memory（LSTM）\cite{hochreiter1997long}により仮想キーボードを実装し97\%の認識精度を達成，Rahimら\cite{rahimadvanced}は1D CNNとBi-GRUを組み合わせたCronoNetで多言語対応の仮想キーボードを開発した．
 しかし，これらの研究は健常者の安定した動作を前提としており，震えや不随意運動を伴う入力への対応は考慮されていない．
 運動機能障害者がこれらのシステムを利用するには，不規則な動作パターンからでも入力意図を推定できる手法が必要となる．
 
@@ -113,13 +113,13 @@ Pradeepら\cite{pradeep2025real}はWebカメラによる顔追跡とニューラ
 
 運動機能障害に伴う震えの補正技術については，信号処理や機械学習を用いた研究が進められている．
 Araújoら\cite{araujo2023analysis}は生理的振戦とパーキンソン病による病的振戦の両方に対してFx-LMSアルゴリズムを評価し，特に病的振戦に対して優れた補正性能を示した．
-Wuら\cite{wu2022visual}はLeap Motionセンサーを用いたジェスチャー予測において，Kalmanフィルタによる震え補正とLSTM\cite{hochreiter1997long}-再帰型ニューラルネットワーク（RNN）の組み合わせにより99.31\%の精度を達成している．
-Wolkeら\cite{wolke2025validity}はMediaPipe\cite{lugaresi2019mediapipe}を用いた振戦の定量的評価手法を提案し，スマートフォンカメラでも臨床的に有効な精度が得られることを示した．
+Wuら\cite{wu2022visual}はLeap Motionセンサーを用いたジェスチャー予測において，Kalmanフィルタによる震え補正とLSTM-再帰型ニューラルネットワーク（RNN）の組み合わせにより99.31\%の精度を達成している．
+Wolkeら\cite{wolke2025validity}はMediaPipeを用いた振戦の定量的評価手法を提案し，スマートフォンカメラでも臨床的に有効な精度が得られることを示した．
 Neogら\cite{neog2024hand}は3D手部ランドマーク検出を用いた手機能評価システムにより，仮想環境でのリハビリテーション効果を示した．
 これらの研究では，震えを信号処理により除去または補正するアプローチが主流である．
 また，震えを補正すべきノイズとして扱う研究が多く，震えを個人の特性として学習するアプローチは十分に検討されていない．
 
-一方，時系列データからの運動意図推定では，LSTM\cite{hochreiter1997long}やGRU\cite{cho2014learning}などの再帰型ニューラルネットワークが広く用いられている．
+一方，時系列データからの運動意図推定では，LSTMやGRUなどの再帰型ニューラルネットワークが広く用いられている．
 Leiら\cite{lei2022intention}はロボット車椅子のナビゲーションにおいて意図予測ベースの共有制御システムを提案し，脳性麻痺患者において従来手法より約30\%タスク完了時間を短縮した．
 Yangら\cite{yang2023learning}はRNNを用いて上肢の運動開始を予測し，支援ロボットの制御に応用した．
 しかし，これらの意図推定研究は特殊センサーやロボットアームを前提としており，汎用カメラを用いたキーボード入力支援への適用例は見られない．
@@ -148,9 +148,9 @@ Yangら\cite{yang2023learning}はRNNを用いて上肢の運動開始を予測�
 
 図\ref{fig:system}に示すように，提案システムは5つの処理ステップで構成される．
 まず，4点キャリブレーションにより作業領域を設定する．
-次に，MediaPipeを用いて手部ランドマークを検出し，人差し指先端の軌跡データを可変長（5-90フレーム）で取得する．
-取得した軌跡から18次元の動的特徴量を抽出し，学習済みGRUモデルに入力して37クラス（a-z，0-9，スペース）の入力意図を推定する．
-推定結果はTop-3候補とその確率をリアルタイムで画面に表示する．
+次に，MediaPipe\cite{lugaresi2019mediapipe}を用いて手部ランドマークを検出し，人差し指先端の軌跡データを可変長（5-90フレーム）で取得する．
+取得した軌跡から18次元の動的特徴量を抽出し，学習済みGRU\cite{cho2014learning}モデルに入力して37クラス（a-z，0-9，スペース）の入力意図を推定する．
+結果はTop-3候補とその確率をリアルタイムで画面に表示する．
 
 \begin{figure}[tb]
 \centering
@@ -226,7 +226,7 @@ Yangら\cite{yang2023learning}はRNNを用いて上肢の運動開始を予測�
 %3.3
 \subsection{MediaPipeによる手指軌跡の取得}
 
-手のランドマーク検出には，Googleが開発したオープンソースのフレームワークであるMediaPipe\cite{lugaresi2019mediapipe}を使用する．
+手のランドマーク検出には，Googleが開発したオープンソースのフレームワークであるMediaPipeを使用する．
 MediaPipeは軽量で処理速度が速く，一般的なWebカメラでも30fpsでの動作が可能であるため，リアルタイム入力支援に適している．
 
 本システムでは，MediaPipe Hands\cite{zhang2020mediapipe}モジュールを利用して手のランドマーク検出を行う．
@@ -281,7 +281,7 @@ MediaPipeは軽量で処理速度が速く，一般的なWebカメラでも30fps
 \subsection{GRUモデルによる入力意図推定}
 
 前節で設計した18次元の動的特徴量シーケンスから入力意図を推定するため，
-本研究ではGRU\cite{cho2014learning}を採用した．
+本研究ではGRUを採用した．
 指先の軌跡は時間的に連続した動きであり，
 震えを含む複雑な動作パターンから入力意図を推定するには時間的文脈を学習できるモデルが必要であるためである．
 なお，LSTM\cite{hochreiter1997long}，

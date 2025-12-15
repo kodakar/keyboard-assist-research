@@ -1,0 +1,133 @@
+%%
+%% 研究報告用スイッチ
+%% [techrep]
+%%
+%% 欧文表記無しのスイッチ(etitle,eabstractは任意)
+%% [noauthor]
+%%
+
+%\documentclass[submit,techrep]{ipsj}
+\documentclass[submit,techrep,noauthor]{ipsj}
+
+
+
+\usepackage[dvipdfmx]{graphicx}
+\graphicspath{{../../figures/}} % 図版をpaper/figures/配下に置く（UTF8からは2階層上）
+\usepackage{latexsym}
+\usepackage{url}
+\usepackage{tikz}
+\usetikzlibrary{shapes.geometric, arrows.meta, positioning, calc}
+
+\def\Underline{\setbox0\hbox\bgroup\let\\\endUnderline}
+\def\endUnderline{\vphantom{y}\egroup\smash{\underline{\box0}}\\}
+\def\|{\verb|}
+%
+
+%\setcounter{巻数}{59}%vol59=2018
+%\setcounter{号数}{10}
+%\setcounter{page}{1}
+
+
+\begin{document}
+
+
+\title{卓上カメラによる指先動作認識を用いた\\運動機能障害者のためのAIキーボード入力支援システム}
+
+\affiliate{TDU}{東京電機大学大学院 未来科学研究科 情報メディア学専攻\\
+Information Systems and Multimedia Design, Graduate School of Science and Technology for Future Life, Tokyo Denki University}
+
+
+\author{小高 大和}{Kodaka Yamato}{TDU}
+\author{岩井 将行}{Iwai Masayuki}{TDU}
+
+%
+%\begin{jkeyword}
+%情報処理学会論文誌ジャーナル，\LaTeX，スタイルファイル，べからず集
+%\end{jkeyword}
+%
+%\begin{eabstract}
+%This document is a guide to prepare a draft for submitting to IPSJ
+%Journal, and the final camera-ready manuscript of a paper to appear in
+%IPSJ Journal, using {\LaTeX} and special style files.  Since this
+%document itself is produced with the style files, it will help you to
+%refer its source file which is distributed with the style files.
+%\end{eabstract}
+%
+%\begin{ekeyword}
+%IPSJ Journal, \LaTeX, style files, ``Dos and Dont's'' list
+%\end{ekeyword}
+
+\maketitle
+
+%1
+\section{はじめに}
+
+パソコンやスマートフォンなどのデジタルデバイスは，
+現代社会において情報アクセスやコミュニケーションに不可欠なツールとなっている．
+しかし，脳性麻痺，本態性振戦，パーキンソン病などの神経疾患や加齢に伴う運動機能の低下により，手の震えや不随意運動を持つ人々にとって，キーボードによる正確な文字入力は困難であり，デジタル社会への参加を阻む障壁となる．
+
+運動機能障害者向けの入力支援技術として，音声入力，視線入力，特殊キーボードなどが開発されてきた．
+しかし，音声入力は構音障害を伴う場合に利用できず，視線入力や特殊デバイスは高価で導入のハードルが高い．
+また，これらの技術は個人の障害特性に合わせた調整が必要であり，手軽に利用を開始できないという課題がある．
+
+そこで本研究では，汎用的な卓上カメラのみを用いて，手指の動きから入力意図を推定するシステムを提案する．
+提案システムは，MediaPipe\cite{lugaresi2019mediapipe,zhang2020mediapipe}による手部ランドマーク検出を基盤とし，震えの特性を含む18次元の動的特徴量を抽出する．
+これをGated Recurrent Unit（GRU）\cite{cho2014learning}モデルに入力し，震えを伴う軌跡からでも正しい入力意図を推定することで，追加ハードウェアなしに運動機能障害者のキーボード入力を支援する．
+
+
+%2
+\section{関連研究}
+
+%2.1
+\subsection{運動機能障害者向けの入力支援技術}
+
+運動機能障害を持つ人々向けの入力支援技術としては，音声入力，視線入力，特殊ハードウェア，カメラベースの手認識などが開発されている．
+
+音声入力はDragon NaturallySpeaking等に代表され広く普及しているが\cite{webaim2023motor}，脳性麻痺など構音障害を伴う場合には発話の明瞭度が低下するため正確な認識が困難となる．
+視線入力ではTobii社がALSや脳性麻痺患者向けの視線追跡デバイスを開発しており\cite{cerebralpalsy2023tobii}，重度の運動障害者に有効な手段となっているが，デバイスが数十万円と高価であり，個人ごとのキャリブレーションにも専門的な調整を要する．
+Gizatdinovaら\cite{gizatdinova2023vision}は視線入力とヘッド入力を比較評価し，ヘッド入力は高精度だが入力速度が遅く，視線入力は高速だが精度が劣るという特有の課題を報告している．
+特殊ハードウェアとしては適応キーボードやマウススティック等があり\cite{reciteme2025assistive}，物理的なアクセシビリティを向上させるが，特定の姿勢や設置環境を前提とするため汎用性に欠ける．
+Cossovichら\cite{cossovich2023co}は運動機能障害者へのインタビュー調査を通じて，多くのユーザーが大衆向けに設計された既存デバイスで我慢している現状を報告しており，より適切な入力支援技術の開発が求められている．
+
+一方，カメラベースの手認識技術は追加ハードウェアなしに実現できる可能性がある．
+Pradeepら\cite{pradeep2025real}はWebカメラによる顔追跡とニューラルネットワークを組み合わせたハンズフリーマウス制御システムを開発し，運動機能障害者が頭部の動きでマウスカーソルを操作できることを実証した．
+また，Abdallahら\cite{abdallah2022light}はMediaPipeとGRU/CNNを組み合わせた手話認識で99.84\%の精度を達成し，Leら\cite{le2023real}はYOLOv7による一人称視点からの手動作検出で95\%以上の精度を報告している．
+キーボード入力への応用としては，Mallikら\cite{mallik2024virtual}がMediaPipe HolisticとLong Short-Term Memory（LSTM）\cite{hochreiter1997long}により仮想キーボードを実装し97\%の認識精度を達成，Rahimら\cite{rahimadvanced}は1D CNNとBi-GRUを組み合わせたCronoNetで多言語対応の仮想キーボードを開発した．
+しかし，これらの研究は健常者の安定した動作を前提としており，震えや不随意運動を伴う入力への対応は考慮されていない．
+運動機能障害者がこれらのシステムを利用するには，不規則な動作パターンからでも入力意図を推定できる手法が必要となる．
+
+%2.2
+\subsection{震え補正と運動意図推定}
+
+運動機能障害に伴う震えの補正技術については，信号処理や機械学習を用いた研究が進められている．
+Araújoら\cite{araujo2023analysis}は生理的振戦とパーキンソン病による病的振戦の両方に対してFx-LMSアルゴリズムを評価し，特に病的振戦に対して優れた補正性能を示した．
+Wuら\cite{wu2022visual}はLeap Motionセンサーを用いたジェスチャー予測において，Kalmanフィルタによる震え補正とLSTM\cite{hochreiter1997long}-再帰型ニューラルネットワーク（RNN）の組み合わせにより99.31\%の精度を達成している．
+Wolkeら\cite{wolke2025validity}はMediaPipeを用いた振戦の定量的評価手法を提案し，スマートフォンカメラでも臨床的に有効な精度が得られることを示した．
+Neogら\cite{neog2024hand}は3D手部ランドマーク検出を用いた手機能評価システムにより，仮想環境でのリハビリテーション効果を示した．
+これらの研究では，震えを信号処理により除去または補正するアプローチが主流である．
+また，震えを補正すべきノイズとして扱う研究が多く，震えを個人の特性として学習するアプローチは十分に検討されていない．
+
+一方，時系列データからの運動意図推定では，LSTMやGRUなどの再帰型ニューラルネットワークが広く用いられている．
+Leiら\cite{lei2022intention}はロボット車椅子のナビゲーションにおいて意図予測ベースの共有制御システムを提案し，脳性麻痺患者において従来手法より約30\%タスク完了時間を短縮した．
+Yangら\cite{yang2023learning}はRNNを用いて上肢の運動開始を予測し，支援ロボットの制御に応用した．
+しかし，これらの意図推定研究は特殊センサーやロボットアームを前提としており，汎用カメラを用いたキーボード入力支援への適用例は見られない．
+
+%2.3
+\subsection{本研究の位置づけ}
+
+前節までに述べたように，既存の入力支援技術には高コスト・専用機器の必要性・健常者を対象とした設計という課題がある．
+カメラベースの手認識技術は低コストで実現可能だが，健常者の安定した動作を前提としている．
+震え補正技術についても，震えをノイズとして除去するアプローチが主流だが，フィルタリングにより本来の入力意図に関する情報まで失われる可能性がある．
+
+そこで本研究では，汎用カメラのみを用いて，運動機能障害者の震えを含む手指の軌跡から入力意図を推定するシステムを提案する．
+震えを除去せず生の軌跡から深層学習モデルで直接学習することで，震えに含まれる動作特性も活用して入力意図を推定する．
+これにより，追加ハードウェアなしに低コストで運動機能障害者のキーボード入力を支援する．
+
+
+% BibTeX使用（本文中の\citeで自動的に参照リストに追加される）
+
+\bibliographystyle{ipsjunsrt}
+\bibliography{references}
+
+
+\end{document}
