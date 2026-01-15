@@ -1,0 +1,145 @@
+% --------------- ページの設定 ---------------
+%% 横幅の余白
+\setlength{\voffset}{0pt}
+\setlength{\oddsidemargin}{19truemm} % 左余白
+\setlength{\textwidth}{172truemm} % 横幅 (210 - 19 *2)
+\addtolength{\oddsidemargin}{-1truein} % 左のデフォルト位置から-1inch
+%% 縦幅の余白
+\setlength{\hoffset}{0pt}
+\setlength{\topmargin}{19truemm} % 上余白
+\setlength{\headheight}{0pt}
+\setlength{\headsep}{0pt}
+\setlength{\textheight}{248truemm} % 縦幅 (297 - 19 + 30)
+\addtolength{\topmargin}{-1truein} % 上のデフォルト位置から-1inch
+%% ページ番号削除
+\pagestyle{empty}
+%% 行間
+\renewcommand{\baselinestretch}{0.9}
+%
+
+% --------------- フォント ---------------
+% ローマンフォントをTimesに変更
+\renewcommand{\rmdefault}{ptm}
+\normalfont
+%
+
+\makeatletter
+
+% --------------- タイトル整形 ---------------
+\let\@title\relax
+\let\@author\relax
+\let\@etitle\relax
+\let\@eauthor\relax
+\let\@supervisor\relax
+\let\@esupervisor\relax
+
+\def\department#1{\def\@department{#1}}
+\def\title#1{\def\@title{#1}}
+\def\author#1#2{\def\@author{#1}\def\@supervisor{#2}}
+\def\etitle#1{\def\@etitle{#1}}
+\def\eauthor#1#2{\def\@eauthor{#1}\def\@esupervisor{#2}}
+
+\def\@maketitle{
+    \begin{center}
+        {\Large{\gt \@title} \par}% 論文のタイトル部分
+        \vspace{2truemm}
+        {\Large{\textrm{\bf \@etitle}} \par}% 論文の英語タイトル部分
+        \vspace{2truemm}
+        \begin{flushright}
+        {\normalsize{\gt \@author}\par}% 氏名
+        %\vspace{2truemm}
+        {\normalsize{\gt \@supervisor} \par}% 氏名
+        \end{flushright}
+        \hspace{5truemm}
+    \end{center}
+    \par\vskip 1em
+}
+%
+
+% --------------- section, subsection, subsubsection の整形 --------------- 
+\renewcommand{\section}{\@startsection{section}{1}{\z@}
+    {.4\Cvs \@plus.2\Cdp \@minus.1\Cdp}
+    {.4\Cvs \@plus.2\Cdp}
+    {\reset@font\large\gt\bfseries}
+}
+\renewcommand{\subsection}{\@startsection{subsection}{2}{\z@}
+    {.4\Cvs \@plus.1\Cdp \@minus.5\Cdp}
+    {.1\Cvs \@plus.1\Cdp }
+    {\reset@font\normalsize\gt\bfseries}
+}
+\renewcommand{\subsubsection}{\@startsection{subsection}{3}{\z@}
+    {.2\Cvs \@plus.1\Cdp \@minus.01\Cdp}
+    {.2\Cvs \@plus.1\Cdp}
+    {\reset@font\normalsize\gt\bfseries}
+}
+%
+
+% --------------- captionの整形 --------------- 
+\long\def\@makecaption#1#2{%
+\vskip\abovecaptionskip
+\iftdir\sbox\@tempboxa{#1\hskip1zw#2}%
+\else\sbox\@tempboxa{#1.　#2}%
+\fi
+\ifdim \wd\@tempboxa >\hsize
+\iftdir #1\hskip1zw#2\relax\par
+\else #1.　#2\relax\par\fi
+\else
+\global \@minipagefalse
+\hbox to\hsize{\hfil\box\@tempboxa\hfil}%
+\fi
+\vskip\belowcaptionskip}
+%
+
+\makeatother
+
+% %% itemize
+% \renewenvironment{itemize}
+% {
+%     \begin{list}{\parbox{1zw}{\$\bullet\$}}   % 見出し記号／直後の空白を調節
+%     {
+%         \setlength{\topsep}{0zw}
+%         \setlength{\itemindent}{0zw}
+%         \setlength{\leftmargin}{3zw}    % 左のインデント
+%         \setlength{\rightmargin}{0zw}   % 右のインデント
+%         \setlength{\labelsep}{0.5em}    % 黒丸と説明文の間
+%         \setlength{\labelwidth}{2zw}    % ラベルの幅
+%         \setlength{\itemsep}{0em}       % 項目ごとの改行幅
+%         \setlength{\listparindent}{0zw} % 段落での一字下り
+%         \setlength{\parsep}{0em}        % 段落での改行幅
+%         \setlength{\partopsep}{0zw}     % 前後に空白行があると追加される
+%     }
+% }
+% { \end{list} }
+
+
+
+
+% このセクションは、文字を詰めるための設定です。初代テンプレより。
+% コメントを外すことで、見た目が少し悪くなりますが、少し多くの文字を入れられるようになります。
+% margins 部のコメントを外すと、あらゆる余白が切り詰められます。
+% table, figure のコメントを外すとレイアウトが崩れるため非推奨です。
+% --------------- 図設定 ---------------
+% %% margins
+% \setlength{\floatsep}{0em}
+% \setlength{\textfloatsep}{0em}
+% \setlength{\intextsep}{1.5em}
+% \setlength{\abovecaptionskip}{0em}
+% \setlength{\belowcaptionskip}{0.3em}
+
+% %% table
+% \let\orgtable\table
+% \let\orgendtable\endtable
+% \def\table{\vspace{-.5\baselineskip}\orgtable}
+% \def\endtable{\orgendtable\vspace{-1.5\baselineskip}}
+% %
+
+% %% figure
+% \let\orgfigure\figure
+% \let\orgendfigure\endfigure
+% \def\figure{\vspace{-.5\baselineskip}\orgfigure}
+% \def\endfigure{\orgendfigure\vspace{-2\baselineskip}}
+% %
+
+% --------------- 段 間隔 ---------------
+\setlength{\columnsep}{2zw}
+%

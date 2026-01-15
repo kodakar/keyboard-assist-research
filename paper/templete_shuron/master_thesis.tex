@@ -1,0 +1,52 @@
+\documentclass[a4j,12pt]{jreport}
+\usepackage[dvipdfmx]{graphicx}
+\usepackage{url}
+\usepackage{caption}
+%\usepackage{algpseudocode}
+%\usepackage{comment}
+%\usepackage{here}
+%
+\renewcommand{\baselinestretch}{1.2}\selectfont
+\captionsetup[figure]{labelsep=period}
+\captionsetup[table]{labelsep=period}
+
+\makeatletter
+\renewcommand{\thefigure}{%
+\arabic{figure}}
+\renewcommand{\thetable}{%
+\arabic{table}}
+\renewcommand{\theequation}{%
+\arabic{equation}}
+\makeatother
+
+\begin{document}
+
+% -------- タイトル ------------
+\input{title}
+
+% ---------- 概要 --------------
+\input{abstract}
+
+% ---- 目次・図目次・表目次 ----
+\newpage
+\tableofcontents
+\newpage
+\listoffigures
+\newpage
+\listoftables
+
+% ---------- 本文 --------------
+\newpage
+\pagenumbering{arabic}
+
+\input{1}
+\input{2}
+\input{3}
+\input{4}
+\input{5}
+\input{6}
+
+% -- 謝辞・学外発表・参考文献 --
+\input{etc}   
+
+\end{document}

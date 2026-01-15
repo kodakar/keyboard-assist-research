@@ -1,0 +1,99 @@
+\documentclass[twocolumn, a4paper, 9pt]{jarticle}
+% --------------- package ---------------
+\usepackage[dvipdfmx]{graphicx}
+\usepackage{yokou}
+\usepackage{url}
+
+%-----参考文献の文字サイズ変更------
+\makeatletter
+  \renewenvironment{thebibliography}[1]{%
+    \global\let\presectionname\relax
+    \global\let\postsectionname\relax
+    \section*{\refname}\@mkboth{\refname}{\refname}%
+    \list{\@biblabel{\@arabic\c@enumiv}}%
+          {\settowidth\labelwidth{\@biblabel{#1}}%
+          \leftmargin\labelwidth
+          \advance\leftmargin\labelsep
+          % 文字サイズ？
+          \setlength\baselineskip{12pt}
+          % アイテム間のマージン
+          \setlength\itemsep{0.4zh}
+          \@openbib@code
+          \usecounter{enumiv}%
+          \let\p@enumiv\@empty
+          \renewcommand\theenumiv{\@arabic\c@enumiv}}%
+    \sloppy
+    \clubpenalty4000
+    \@clubpenalty\clubpenalty
+    \widowpenalty4000%
+    \sfcode`\.\@m}
+    {\def\@noitemerr
+      {\@latex@warning{Empty `thebibliography' environment}}%
+    \endlist}
+\makeatother
+
+% --------------- 本文 --------------- 
+
+\title{日本語タイトル}
+\etitle{English Title}
+\author{00FMIXX 苗字 名前}{研究指導教員 教授 岩井 将行}
+\eauthor{FIRST LAST}{MASAYUKI IWAI}
+
+\begin{document}
+\maketitle
+% \maketitle内でページ番号を表示するコマンドを呼んでいるため
+\thispagestyle{empty} 
+
+\section{節タイトル}
+
+\subsection{参考文献}
+
+参考文献の例を日本語文献\cite{sampleJP}，英語文献\cite{sampleEN}，日本語URL\cite{sampleURLJP}，英語URL\cite{sampleURLEN}に示す．
+
+\subsection{図}
+
+\begin{figure}[h]
+	\centering
+	\includegraphics[width=3cm]{./img/iwai.png}
+	\caption{図のサンプル}
+	\label{fig:test}
+\end{figure}
+\vspace{5mm}
+
+図の例を図\ref{fig:test}に示す．
+
+\subsection{表}
+
+\begin{table}[htb]
+	\caption{表のサンプル}
+	\begin{center}
+	\begin{tabular}{|c|c|} \hline
+			A & 1 \\ \hline
+			B & 2 \\ \hline
+	\end{tabular}
+	\end{center}
+	\label{table:test}
+\end{table}
+
+表の例を表\ref{table:test}に示す．
+
+
+
+\subsection{更新}
+2025/01/24
+\begin{itemize}
+    \item 岩井先生を准教授→教授に変更
+    \vspace{-1em}
+    \item itemizeについてstyファイルの内容(95〜112行目)をコメントアウト(overleafでエラーが出る)
+\end{itemize}
+予稿は4ページ\\
+予稿集にまとめるためページ番号はいらない(ユニぱ要確認)
+overleafではcompilerをLatexに変更する\\
+latexmkrcは用意しているので表示されるはず
+
+\subsection*{謝辞}
+
+\bibliographystyle{junsrt}
+\bibliography{master_yokou}
+ 
+\end{document}

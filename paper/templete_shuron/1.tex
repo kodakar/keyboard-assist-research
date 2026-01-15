@@ -1,0 +1,60 @@
+\setcounter{chapter}{1}
+\setcounter{section}{0}
+%\setcounter{subsubsection}{0}
+
+\begin{center}
+	\vspace{0.5cm}
+	\huge{\bf 第1章}
+	\par
+	\vspace{1cm}
+	\hrulefill
+	\par
+	\vspace{1cm}
+	\huge{\bf 章タイトル}
+	\par
+	\vspace{0.5cm}
+	\hrulefill
+	\vspace{1cm}
+	\par
+	
+	%\normalsize
+	\begin{flushleft}
+		\large{{\bf　本章では，◯◯について述べる．}}
+	\end{flushleft}
+\end{center}
+
+\addcontentsline{toc}{chapter}{\protect\numberline{第1章}{章タイトル}}
+
+\newpage
+
+\section{節タイトル}
+
+\subsection{参考文献}
+
+参考文献の例を日本語文献\cite{sampleJP}，英語文献\cite{sampleEN}，日本語URL\cite{sampleURLJP}，英語URL\cite{sampleURLEN}に示す．
+
+\subsection{図}
+
+\begin{figure}[h]
+	\centering
+	\includegraphics[width=3cm]{./img/iwai.png}
+	\caption{図のサンプル}
+	\label{fig:test}
+\end{figure}
+
+図の例を図\ref{fig:test}に示す．
+
+\subsection{表}
+
+\begin{table}[htb]
+	\caption{表のサンプル}
+	\begin{center}
+	\begin{tabular}{|c|c|} \hline
+			A & 1 \\ \hline
+			B & 2 \\ \hline
+	\end{tabular}
+	\end{center}
+	\label{table:test}
+\end{table}
+
+表の例を表\ref{table:test}に示す．
