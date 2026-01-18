@@ -190,8 +190,8 @@ Yangら\cite{yang2023learning}はRNNを用いて上肢の運動開始を予測�
     \node[process, below=of camera] (calib) {4点キャリブレーション};
     \node[process, below=of calib] (mediapipe) {手の軌跡データ収集};
     \node[process, below=of mediapipe] (feature) {18次元特徴量抽出};
-    \node[block, below=of feature] (lstm) {GRU入力意図推定};
-    \node[block, below=of lstm] (output) {リアルタイム予測表示};
+    \node[process, below=of feature] (lstm) {GRU入力意図推定};
+    \node[process, below=of lstm] (output) {リアルタイム予測表示};
     
     % 矢印
     \draw[arrow] (camera) -- (calib);
