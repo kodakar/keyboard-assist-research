@@ -5,67 +5,77 @@
 \newpage
 
 \begin{center}
-	\LARGE{修士論文要旨 \hspace{10mm} 2017年度（平成29年度）}
+	\LARGE{修士論文要旨 \hspace{10mm} 2025年度（令和7年度）}
 \end{center}
 
 \vspace{5mm}
 
 \begin{center}
-	\LARGE{日本語タイトル}
+	\LARGE{卓上カメラによる指先動作認識を用いた\\運動機能障害者のための\\AIキーボード入力支援システムの研究}
 \end{center}
 
 \begin{center}
 	概要
 \end{center}
 
-%% ここに日本語の概要
-日本語概要
+運動機能障害者における手指の震えや不随意運動は，従来のキーボード入力を困難にし，デジタルアクセスの格差を生む要因となっている．
+本研究では，汎用的な卓上USBカメラのみを用いて手指動作から入力意図を推定するシステムを提案する．
+提案システムでは，MediaPipeによる手部ランドマーク検出を基盤とし，位置座標，速度，加速度，震えの振幅や方向転換頻度など18次元の動的特徴量を抽出することで運動特性を定量化した．
+これらの特徴量を可変長に対応したGated Recurrent Unit（GRU）モデルに入力し，37クラスのキー入力意図を推定するアーキテクチャを構築した．
+評価実験において，オフラインでTop-1精度98.0\%を達成し，被験者10名によるリアルタイム評価では通常入力で平均83.8\%を記録した．
+特に，震えを伴う入力では96.5\%で誤入力が発生したが，システムは64.9\%の試行で正しい意図を推定でき，不随意運動下における入力補正の有効性が確認された．
+本システムは追加ハードウェアを必要とせず，低コストで運動機能障害者のデジタルアクセシビリティ向上に貢献する．
 
 \begin{flushleft}
 	キーワード:
 \end{flushleft}
 
-{\underline{キーワード1}, \underline{キーワード2}, \underline{キーワード3}, \underline{キーワード4}}
+{\underline{アクセシビリティ}, \underline{運動機能障害}, \underline{手指追跡}, \underline{深層学習}, \underline{入力支援}}
 
 \vspace{15mm}
 
 \begin{flushright}
 	\large 東京電機大学大学院 未来科学研究科 情報メディア学専攻
 	\begin{flushright}
-		\LARGE 苗字 名前
+		\LARGE 小高 大和
 	\end{flushright}
 \end{flushright}
 
 \newpage
 
 \begin{center}
-	\LARGE{Master's Thesis Academic Year 2017}
+	\LARGE{Master's Thesis \hspace{10mm} Academic Year 2025}
 \end{center}
 	
 \vspace{5mm}
 
 \begin{center}
-	\LARGE{English Title}
+	\Large{Research on AI-Based Keyboard Input Assistance System\\for People with Motor Impairments\\Using Fingertip Motion Recognition via Desktop Camera}
 \end{center}
 
 \begin{center}
 	Abstract
 \end{center}
 
-%% ここに英語の概要
-English Abstract
+Hand tremors and involuntary movements in individuals with motor impairments make conventional keyboard input difficult, creating disparities in digital access.
+This study proposes a system that estimates input intention from finger movements using only a standard desktop USB camera.
+The proposed system is built on hand landmark detection using MediaPipe, extracting 18-dimensional dynamic features including position coordinates, velocity, acceleration, tremor amplitude, and direction change frequency to quantify motor characteristics.
+These features are input to a Gated Recurrent Unit (GRU) model capable of handling variable-length sequences to estimate input intention across 37 key classes.
+In evaluation experiments, the system achieved Top-1 accuracy of 98.0\% in offline testing, and an average of 83.8\% in real-time evaluation with 10 participants under normal input conditions.
+Notably, while 96.5\% of tremor-simulated inputs resulted in erroneous keystrokes, the system correctly estimated the intended key in 64.9\% of trials, confirming the effectiveness of input correction under involuntary movement conditions.
+This system requires no additional hardware and contributes to improving digital accessibility for people with motor impairments at low cost.
 
 \begin{flushleft}
 	Keyword:
 \end{flushleft}
 
-{\underline{Keyword1}, \underline{Keyword2}, \underline{Keyword3}, \underline{Keyword4}}
+{\underline{Accessibility}, \underline{Motor Impairment}, \underline{Hand Tracking}, \underline{Deep Learning}, \underline{Input Assistance}}
 
 \vspace{15mm}
 
 \begin{flushright}
 	\large Department of Information and Media Engineering,\\Tokyo Denki University
 	\begin{flushright}
-		\LARGE First LAST
+		\LARGE Yamato KODAKA
 	\end{flushright}
 \end{flushright}

@@ -1,7 +1,6 @@
 \newpage
 \setcounter{chapter}{4}
 \setcounter{section}{0}
-%\setcounter{subsubsection}{0}
 
 \begin{center}
 	\vspace{0.5cm}
@@ -11,23 +10,179 @@
 	\hrulefill
 	\par
 	\vspace{1cm}
-	\huge{\bf 章タイトル}
+	\huge{\bf 評価実験}
 	\par
 	\vspace{0.5cm}
 	\hrulefill
 	\vspace{1cm}
 	\par
 	
-	%\normalsize
 	\begin{flushleft}
-		\large{{\bf　本章では，◯◯について述べる．}}
+		\large{{\bf　本章では，モデル比較実験による最適モデルの選定と，選定したモデルを用いた実用性評価実験の設計について述べる．}}
 	\end{flushleft}
 \end{center}
 
-\addcontentsline{toc}{chapter}{\protect\numberline{第4章}{章タイトル}}
+\addcontentsline{toc}{chapter}{\protect\numberline{第4章}{評価実験}}
 
 \newpage
 
-\section{節タイトル}
+\section{評価の目的と概要}
 
-\subsection{節タイトル}
+提案システムの性能を検証するため，モデル比較実験と実用性評価実験の2段階で評価を実施した．
+モデル比較実験では，入力意図推定に適したモデルの選定を目的として，事前に収集したデータセットを用いてGRU，LSTM，CNN，TCNの4種類のモデルについて比較評価を行った．オフライン評価と研究者本人による予備的なリアルタイム評価の結果に基づき，GRUを最適モデルとして選定した．
+選定したGRUモデルを用いた実用性評価実験では，健常者10名を対象に実環境での入力実験を実施し，システムの実用性を検証した．
+
+
+\section{実験環境}
+
+評価実験に使用した環境を表\ref{tab:exp_env}に示す．
+モデルの学習にはGPUを使用し，CUDA対応版のPyTorchで実施した．
+図\ref{fig:data_collection_setup}にデータ収集時の実験環境を示す．
+
+\begin{table}[htb]
+\caption{実験環境}
+\begin{center}
+\begin{tabular}{|l|l|} \hline
+項目 & 内容 \\ \hline \hline
+OS & Windows 11 \\ \hline
+CPU & Intel Core i7-14700 (2.10 GHz) \\ \hline
+メモリ & 32GB \\ \hline
+GPU & NVIDIA GeForce RTX 4070 Ti Super \\ \hline
+プログラミング言語 & Python 3.10 \\ \hline
+深層学習フレームワーク & PyTorch 2.0 (CUDA対応) \\ \hline
+手認識ライブラリ & MediaPipe 0.10 \\ \hline
+画像処理ライブラリ & OpenCV 4.11 \\ \hline
+カメラ & Webカメラ（640×480, 30fps） \\ \hline
+\end{tabular}
+\end{center}
+\label{tab:exp_env}
+\end{table}
+
+\begin{figure}[htb]
+\centering
+\includegraphics[width=0.8\columnwidth]{../figures/data_collection_setup.png}
+\caption{データ収集の実験環境}
+\label{fig:data_collection_setup}
+\end{figure}
+
+
+\section{モデル比較実験}
+
+\subsection{データセット}
+
+モデル比較実験には，研究者本人が収集したデータセットを使用した．
+入力テキストには，37種類の文字が均等に含まれるランダム文字列を使用した．
+ランダム文字列を採用した理由は，言語モデルによる文脈予測の影響を排除し，システム単体の純粋なキーストローク認識能力を評価するためである．
+10種類のランダム文字列（シード0-9）を各5回ずつ入力し，合計4,750サンプルのデータセットを構築した．
+データセットは訓練用（60\%），検証用（20\%），テスト用（20\%）に分割した．
+
+\subsection{比較モデル}
+
+GRU（2層構成，隠れ層128次元），LSTM（2層構成，隠れ層128次元），CNN（3層畳み込み，カーネルサイズ3），TCN（3層構成，dilation factor 1, 2, 4）の4種類を比較した．
+すべてのモデルは同一のデータセット，同一のハイパーパラメータ（学習率0.001，バッチサイズ32，エポック数100，早期終了patience 5）で学習した．
+
+\subsection{オフライン評価結果}
+
+表\ref{tab:offline_results}にテストセットを用いたオフライン評価の結果を示す．
+GRUがTop-1精度98.00\%と最も高い性能を達成した．
+また，GRUはパラメータ数が約167Kと4モデル中最小であり，計算コストも低い．
+
+\begin{table}[htb]
+\caption{モデル別オフライン評価結果}
+\begin{center}
+\begin{tabular}{|l|c|c|c|} \hline
+モデル & パラメータ数 & Top-1精度 & Top-3精度 \\ \hline \hline
+GRU & 約167K & \textbf{98.00\%} & \textbf{99.89\%} \\ \hline
+LSTM & 約219K & 97.47\% & 99.89\% \\ \hline
+CNN & 約169K & 93.58\% & 99.47\% \\ \hline
+TCN & 約209K & 94.21\% & 99.47\% \\ \hline
+\end{tabular}
+\end{center}
+\label{tab:offline_results}
+\end{table}
+
+図\ref{fig:learning_curves}にGRUモデルの学習曲線を示す．
+訓練損失と検証損失が安定して収束しており，過学習を起こさず適切に学習できていることが確認できる．
+
+\begin{figure}[htb]
+\centering
+\includegraphics[width=\columnwidth]{../figures/learning_curves.png}
+\caption{GRUモデルの学習曲線}
+\label{fig:learning_curves}
+\end{figure}
+
+図\ref{fig:confusion_matrix}にGRUモデルの混同行列を示す．
+対角成分が高く，ほとんどのクラスで高い認識精度を達成している．
+一部の隣接キー（d-f，o-0など）間で誤認識が見られるものの，全体として優れた識別性能を示した．
+
+\begin{figure}[htb]
+\centering
+\includegraphics[width=\columnwidth]{../figures/confusion_matrix.png}
+\caption{GRUモデルの混同行列（テストセット）}
+\label{fig:confusion_matrix}
+\end{figure}
+
+
+\subsection{予備的リアルタイム評価結果}
+
+研究者本人による予備的なリアルタイム評価を行った結果を表\ref{tab:realtime_preliminary}に示す．
+GRUがTop-1精度100.0\%と完璧な認識精度を実現した．
+一方，CNNとTCNはリアルタイム環境で性能が大幅に低下した．
+これは，畳み込み層による局所的な特徴抽出が，可変長の時系列パターン全体を捉える上で不十分であったためと考えられる．
+図\ref{fig:model_comparison}にオフライン評価とリアルタイム評価の比較を示す．
+
+\begin{table}[htb]
+\caption{モデル別予備的リアルタイム評価結果}
+\begin{center}
+\begin{tabular}{|l|c|c|} \hline
+モデル & Top-1精度 & Top-3精度 \\ \hline \hline
+GRU & \textbf{100.0\%} & \textbf{100.0\%} \\ \hline
+LSTM & 81.8\% & 100.0\% \\ \hline
+CNN & 36.4\% & 90.9\% \\ \hline
+TCN & 63.6\% & 72.7\% \\ \hline
+\end{tabular}
+\end{center}
+\label{tab:realtime_preliminary}
+\end{table}
+
+
+\begin{figure}[htb]
+\centering
+\includegraphics[width=\columnwidth]{../figures/model_comparison.png}
+\caption{モデル別性能比較（オフライン vs リアルタイム）}
+\label{fig:model_comparison}
+\end{figure}
+
+\subsection{モデル選定}
+
+モデル比較実験の結果に基づき，入力意図推定モデルとしてGRUを採用した．
+GRUを選択した理由は，オフライン評価・リアルタイム評価ともに最高精度を達成したこと，パラメータ数が最小で計算効率が高いこと，時系列データの長期依存関係を適切に学習できることである．
+
+
+\section{実用性評価実験の設計}
+
+\subsection{被験者}
+
+被験者は20代の健常男性10名である．
+全員がキーボード入力に習熟しており，タッチタイピングが可能である．
+本研究では，運動機能障害者を直接の被験者とすることが倫理的・実務的に困難であったため，健常者による評価を行った．
+ただし，震えを伴う入力の評価として，被験者に振戦を模擬した入力を行わせる条件を設けた．
+
+\subsection{入力条件}
+
+評価には通常入力と振戦模擬入力の2種類の入力条件を設定した．
+通常入力条件では，被験者に「丁寧かつ正確に入力してください」と指示し，標準的な使用状況下でのシステム性能を評価した．
+振戦模擬入力条件では，被験者に「目標キーに向かって指を動かした後，押下直前にわざと手を動かして別のキーを押してください」と指示した．
+これにより，振戦による誤入力を模擬した条件下でのシステムの頑健性を検証した．
+振戦模擬入力は実際の運動機能障害者の入力パターンを完全に再現するものではないが，震えにより意図しないキーが押下される状況を近似的に評価できる．
+
+\subsection{入力タスク}
+
+入力タスクには，37種類の全文字が均等に含まれるランダム文字列を使用した．
+各被験者は，通常入力条件と振戦模擬入力条件のそれぞれで，この文字列を1回入力した．
+
+\subsection{評価指標}
+
+実用性評価実験では，Top-1精度とTop-3精度を主要な評価指標として使用した．
+振戦模擬入力条件では，追加の評価指標として誤入力発生率（実際に押下されたキーが意図したキーと異なる割合）と救済率（誤入力が発生した試行においてシステムが正しい意図を推定できた割合）を測定した．
+救済率は，振戦により誤ったキーを押してしまった場合に，システムがどの程度正しい意図を推定できるかを示す指標であり，本システムの実用性を評価する上で重要な指標である．
