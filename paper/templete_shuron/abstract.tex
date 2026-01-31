@@ -22,7 +22,7 @@
 本研究では，汎用的な卓上USBカメラのみを用いて手指動作から入力意図を推定するシステムを提案する．
 提案システムでは，MediaPipeによる手部ランドマーク検出を基盤とし，位置座標，速度，加速度，震えの振幅や方向転換頻度など18次元の動的特徴量を抽出することで運動特性を定量化した．
 これらの特徴量を可変長に対応したGated Recurrent Unit（GRU）モデルに入力し，37クラスのキー入力意図を推定するアーキテクチャを構築した．
-評価実験において，オフラインでTop-1精度98.0\%を達成し，被験者10名によるリアルタイム評価では通常入力で平均83.8\%を記録した．
+評価実験において，オフラインでTop-1精度98.0\%を達成し，実験参加者10名によるリアルタイム評価では通常入力で平均83.8\%を記録した．
 特に，震えを伴う入力では96.5\%で誤入力が発生したが，システムは64.9\%の試行で正しい意図を推定でき，不随意運動下における入力補正の有効性が確認された．
 本システムは追加ハードウェアを必要とせず，低コストで運動機能障害者のデジタルアクセシビリティ向上に貢献する．
 
@@ -64,18 +64,3 @@ These features are input to a Gated Recurrent Unit (GRU) model capable of handli
 In evaluation experiments, the system achieved Top-1 accuracy of 98.0\% in offline testing, and an average of 83.8\% in real-time evaluation with 10 participants under normal input conditions.
 Notably, while 96.5\% of tremor-simulated inputs resulted in erroneous keystrokes, the system correctly estimated the intended key in 64.9\% of trials, confirming the effectiveness of input correction under involuntary movement conditions.
 This system requires no additional hardware and contributes to improving digital accessibility for people with motor impairments at low cost.
-
-\begin{flushleft}
-	Keyword:
-\end{flushleft}
-
-{\underline{Accessibility}, \underline{Motor Impairment}, \underline{Hand Tracking}, \underline{Deep Learning}, \underline{Input Assistance}}
-
-\vspace{15mm}
-
-\begin{flushright}
-	\large Department of Information and Media Engineering,\\Tokyo Denki University
-	\begin{flushright}
-		\LARGE Yamato KODAKA
-	\end{flushright}
-\end{flushright}
